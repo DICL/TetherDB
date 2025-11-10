@@ -1,0 +1,213 @@
+#pragma once
+
+#include "lemma.h"
+#include "db/memtable.h"
+
+#if LEMMA_L0
+namespace ROCKSDB_NAMESPACE {
+
+class LogSstIterator;
+
+class LogSst {
+ public:
+  LogSst(MemTable* mem)
+    : mem_(mem), log_number_(mem->GetLogNumber()), num_entries_(mem->num_entries()) {
+    ReadOptions ro;
+    ro.total_order_seek = true;
+    Arena arena;
+    offsets_ = (uint64_t*)calloc(num_entries_, sizeof(uint64_t));
+    footers_ = (uint64_t*)calloc(num_entries_, sizeof(uint64_t));
+    InternalIterator* iter = mem->NewIterator(ro, &arena);
+    uint64_t i=0;
+    iter->SeekToFirst();
+    while(iter->Valid()) {
+      footers_[i] = ExtractInternalKeyFooter(iter->key());
+      offsets_[i] = iter->log_offset();
+      if(offsets_[i] < 1000)
+        fprintf(stderr, "offsets_[i]: %lu \n", offsets_[i]);
+      i++;
+      iter->Next();
+    }
+  }
+
+  ~LogSst() { free(offsets_); free(footers_); }
+
+ private:
+  friend class LogSstIterator;
+  MemTable* mem_;
+  uint64_t log_number_;
+  uint64_t num_entries_;
+  uint64_t* offsets_;
+  uint64_t* footers_;
+};
+
+class LogSstIterator : public InternalIteratorBase<Slice> {
+ public:
+  LogSstIterator(LogSst* log_sst, FileSystem* fs, FileOptions file_options, const std::string & wal_dir, const int header_size)
+    : log_sst_(log_sst),
+      pinned_iters_mgr_(nullptr),
+      valid_(true),
+      status_(Status::OK()),
+      header_size_(header_size) {
+    std::string fname = LogFileName(wal_dir, log_sst_->log_number_);
+    status_ = fs->NewRandomAccessFile(fname, file_options, &file_, nullptr);
+  }
+  ~LogSstIterator(){}
+  
+  void Seek(const Slice& /*target*/) override {
+    fprintf(stderr, "LogSstIterator::Seek() not implemented\n");
+  }
+  void SeekForPrev(const Slice& /*target*/) override {
+    fprintf(stderr, "LogSstIterator::SeekForPrev() not implemented\n");
+  }
+  void SeekToFirst() override {
+    cur_ = 0;
+    ReadFromFile();
+  }
+  void SeekToLast() override {
+    fprintf(stderr, "LogSstIterator::SeekToLast() not implemented\n");
+  }
+  void Next() final override {
+    cur_++;
+    if(cur_ == log_sst_->num_entries_)
+      valid_ = false;
+    else
+      ReadFromFile();
+  }
+  bool NextAndGetResult(IterateResult* result) override {//////////////////////
+    cur_++;
+    ReadFromFile();
+    if (valid_) {
+      result->key = key_;
+      result->bound_check_result = UpperBoundCheckResult();
+      result->value_prepared = true;
+    }
+    return valid_;
+  }
+  void Prev() override {
+    fprintf(stderr, "LogSstIterator::Prev() not implemented\n");
+  }
+  bool Valid() const override {
+    return valid_;
+  }
+  Slice key() const override {
+    return key_;
+  }
+  Slice user_key() const override {
+    fprintf(stderr, "LogSstIterator::user_key() not implemented\n");
+    return key_;
+  }
+  bool PrepareValue() override {
+    fprintf(stderr, "LogSstIterator::PrepareValue() not implemented\n");
+    return true;
+  }
+  Slice value() const override {
+    return value_;
+  }
+  Status status() const override {
+    return status_;
+  }
+  inline IterBoundCheck UpperBoundCheckResult() override {////////////////////////////
+    return IterBoundCheck::kInbound;
+  }
+  void SetPinnedItersMgr(PinnedIteratorsManager* pinned_iters_mgr) override {
+    pinned_iters_mgr_ = pinned_iters_mgr;
+  }
+  bool IsKeyPinned() const override {
+    fprintf(stderr, "LogSstIterator::IsKeyPinned() not implemented\n");
+    return true;
+  }
+  bool IsValuePinned() const override {
+    fprintf(stderr, "LogSstIterator::IsValuePinned() not implemented\n");
+    return true;
+  }
+  
+
+ private:
+  void ReadFromFile() {
+    Slice result;
+    uint64_t start_off = log_sst_->offsets_[cur_];
+    uint64_t left = log::kBlockSize - start_off%log::kBlockSize;
+    char* scratch = (char*)malloc(200*sizeof(char));
+    if(left > 200) {//should change!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      file_->Read(log_sst_->offsets_[cur_], 200, IOOptions(), &result, scratch, nullptr);
+    } else {
+      file_->Read(log_sst_->offsets_[cur_], left, IOOptions(), &result, scratch, nullptr);
+      file_->Read(log_sst_->offsets_[cur_] + left + header_size_, 200 - left, IOOptions(), &result, scratch+left, nullptr);
+      result = Slice(scratch, 200);
+    }
+    
+    if(result[0] == kTypeColumnFamilyValue) {
+      result.remove_prefix(1);
+      /*if(result.size() < 8) {
+        
+        //
+      }*/
+      uint32_t cid = 0;
+      GetVarint32(&result, &cid);
+      uint32_t len = 0;
+      GetVarint32(&result, &len);      
+      if(result.size() < len) {
+        fprintf(stderr, "what!!!!!!!!!!!!!!!!!!!!!\n");
+        //
+      }
+      std::string* key = new std::string();
+      key->append(result.data(), len);
+      PutFixed64(key, log_sst_->footers_[cur_]);
+      key_ = *key;
+      result.remove_prefix(len);
+
+
+      if(result.size() < 4) {
+        fprintf(stderr, "what!!!!!!!!!!!!!!!!!!!!!\n");
+        //
+      }
+      len = 0;
+      GetVarint32(&result, &len);      
+      if(result.size() < len) {
+        fprintf(stderr, "what!!!!!!!!!!!!!!!!!!!!!\n");
+        //
+      }
+      value_ = Slice(result.data(), len);
+      result.remove_prefix(len);  
+    } else {
+      fprintf(stderr, "!!!!!!!!!!!!!!!!!!! %lu\n", start_off);
+      fprintf(stderr, "!!!!!!!!!!!!!!!!!!! %lu %lu\n", cur_, log_sst_->num_entries_);
+      fprintf(stderr, "result:");
+      for(int i=0; i<20; i++){
+        char tmp = result.data()[i];
+        if(('a'<=tmp && tmp<='z') || ('A'<=tmp && tmp<='Z') || ('0'<=tmp && tmp<='9'))
+          fprintf(stderr, "%c ", tmp);
+        else
+          fprintf(stderr, "|%d| ", tmp);
+      }
+      fprintf(stderr, "\n");
+    }
+    //uint32_t key_size = result.data()[2];
+    
+
+
+    /*fprintf(stderr, "result:");
+    for(int i=0; i<20; i++){
+      char tmp = result.data()[i];
+      if(('a'<=tmp && tmp<='z') || ('A'<=tmp && tmp<='Z') || ('0'<=tmp && tmp<='9'))
+        fprintf(stderr, "%c ", tmp);
+      else
+        fprintf(stderr, "|%d| ", tmp);
+    }
+    fprintf(stderr, "\n");*/
+  }
+
+  LogSst* log_sst_;
+  std::unique_ptr<FSRandomAccessFile> file_;
+  PinnedIteratorsManager* pinned_iters_mgr_;
+  Slice key_;
+  Slice value_;
+  bool valid_;
+  Status status_;
+  uint64_t cur_;
+  const int header_size_;
+};
+}//namespace ROCKSDB_NAMESPACE
+
+#endif

@@ -1,0 +1,617 @@
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   1111
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   2222
+open mode!!!!!!!!!!!!!!! 0
+[2024-08-06 20:41:33.252970] Starting SPDK v21.10-pre git sha1 4ac203b2d / DPDK 21.08.0 initialization...
+[2024-08-06 20:41:33.253026] [ DPDK EAL parameters: [2024-08-06 20:41:33.253041] spdk [2024-08-06 20:41:33.253047] -c 0x1 [2024-08-06 20:41:33.253053] --log-level=lib.eal:6 [2024-08-06 20:41:33.253060] --log-level=lib.cryptodev:5 [2024-08-06 20:41:33.253068] --log-level=user1:6 [2024-08-06 20:41:33.253076] --base-virtaddr=0x200000000000 [2024-08-06 20:41:33.253084] --match-allocations [2024-08-06 20:41:33.253092] --file-prefix=spdk0 [2024-08-06 20:41:33.253099] --proc-type=auto [2024-08-06 20:41:33.253106] ]
+EAL: No available 1048576 kB hugepages reported
+TELEMETRY: No legacy callbacks, legacy socket not created
+addr: trtype:RDMA adrfam:IPv4 traddr:10.0.0.90 trsvcid:4421 subnqn:nqn.2019-04.pos:subsystem2
+ssdlogging !!!!!!!!!!!!!!!!!!!!!! yes !!!!!!!!!
+Using controller Linux                (bc39ab81984c8e0d    ) with 10 namespaces.
+Namespace ID: 10 size: 2880GB
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 11
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 22
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 33
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 44
+NVMe good!!!!!!!!!!!!!!!!!!!!!!!
+start l0:0, start File: 256, end: 562536037
+total queue: 128, topfs queue: 120
+SPDK memory allocation starts (60.00 GB)
+...0.0%cpu set
+Attaching to 10.0.0.90
+
+Attached to 10.0.0.90
+num_io_queues: 128
+0x55bbb98a4000
+Controller IO queue size: 512
+
+
+
+...20.0%
+
+...40.0%
+
+...60.0%
+
+
+
+
+
+
+...80.0%
+
+
+
+
+
+...100%
+SPDK memory allocation finished.
+table_cache_size: 4194304
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   1111
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   2222
+open mode!!!!!!!!!!!!!!! 0
+addr: trtype:RDMA adrfam:IPv4 traddr:10.0.0.90 trsvcid:4421 subnqn:nqn.2019-04.pos:subsystem4
+ssdlogging !!!!!!!!!!!!!!!!!!!!!! yes !!!!!!!!!
+Using controller Linux                (751b8312cb174724    ) with 10 namespaces.
+Namespace ID: 10 size: 2880GB
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 11
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 22
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 33
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 44
+
+NVMe good!!!!!!!!!!!!!!!!!!!!!!!
+start l0:0, start File: 256, end: 562536037
+total queue: 128, topfs queue: 120
+table_cache_size: 4194304
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   1111
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   2222
+open mode!!!!!!!!!!!!!!! 0
+addr: trtype:RDMA adrfam:IPv4 traddr:10.0.0.90 trsvcid:4421 subnqn:nqn.2019-04.pos:subsystem5
+ssdlogging !!!!!!!!!!!!!!!!!!!!!! yes !!!!!!!!!
+Using controller Linux                (935ab0db236084f1    ) with 10 namespaces.
+Namespace ID: 10 size: 2880GB
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 11
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 22
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 33
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 44
+NVMe good!!!!!!!!!!!!!!!!!!!!!!!
+start l0:0, start File: 256, end: 562536037
+total queue: 128, topfs queue: 120
+table_cache_size: 4194304
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   1111
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   2222
+open mode!!!!!!!!!!!!!!! 0
+addr: trtype:RDMA adrfam:IPv4 traddr:10.0.0.90 trsvcid:4421 subnqn:nqn.2019-04.pos:subsystem6
+ssdlogging !!!!!!!!!!!!!!!!!!!!!! yes !!!!!!!!!
+Using controller Linux                (ac4b4346427acf8b    ) with 10 namespaces.
+Namespace ID: 10 size: 2880GB
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 11
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 22
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 33
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 44
+NVMe good!!!!!!!!!!!!!!!!!!!!!!!
+start l0:0, start File: 256, end: 562536037
+total queue: 128, topfs queue: 120
+table_cache_size: 4194304
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   1111
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   2222
+open mode!!!!!!!!!!!!!!! 0
+addr: trtype:RDMA adrfam:IPv4 traddr:11.0.0.91 trsvcid:4521 subnqn:nqn.2019-04.pos:subsystem7
+ssdlogging !!!!!!!!!!!!!!!!!!!!!! yes !!!!!!!!!
+
+Using controller Linux                (1f0f070c4e35bca2    ) with 10 namespaces.
+Namespace ID: 10 size: 2880GB
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 11
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 22
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 33
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 44
+NVMe good!!!!!!!!!!!!!!!!!!!!!!!
+start l0:0, start File: 256, end: 562536037
+total queue: 128, topfs queue: 120
+table_cache_size: 4194304
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   1111
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   2222
+open mode!!!!!!!!!!!!!!! 0
+addr: trtype:RDMA adrfam:IPv4 traddr:11.0.0.91 trsvcid:4521 subnqn:nqn.2019-04.pos:subsystem8
+ssdlogging !!!!!!!!!!!!!!!!!!!!!! yes !!!!!!!!!
+Using controller Linux                (5592ec88dee33c33    ) with 10 namespaces.
+Namespace ID: 10 size: 2880GB
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 11
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 22
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 33
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 44
+
+NVMe good!!!!!!!!!!!!!!!!!!!!!!!
+start l0:0, start File: 256, end: 562536037
+total queue: 128, topfs queue: 120
+table_cache_size: 4194304
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   1111
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   2222
+open mode!!!!!!!!!!!!!!! 0
+addr: trtype:RDMA adrfam:IPv4 traddr:11.0.0.91 trsvcid:4521 subnqn:nqn.2019-04.pos:subsystem9
+ssdlogging !!!!!!!!!!!!!!!!!!!!!! yes !!!!!!!!!
+Using controller Linux                (3c737e4bdc0d1554    ) with 10 namespaces.
+Namespace ID: 10 size: 2880GB
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 11
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 22
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 33
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 44
+NVMe good!!!!!!!!!!!!!!!!!!!!!!!
+start l0:0, start File: 256, end: 562536037
+total queue: 128, topfs queue: 120
+table_cache_size: 4194304
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions no_block_cache
+InitializeOptions
+InitializeOptions default
+InitializeOptions
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   1111
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   2222
+open mode!!!!!!!!!!!!!!! 0
+addr: trtype:RDMA adrfam:IPv4 traddr:11.0.0.91 trsvcid:4521 subnqn:nqn.2019-04.pos:subsystem10
+ssdlogging !!!!!!!!!!!!!!!!!!!!!! yes !!!!!!!!!
+Using controller Linux                (a244cec2666895e7    ) with 10 namespaces.
+Namespace ID: 10 size: 2880GB
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 11
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 22
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 33
+&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&& 44
+
+NVMe good!!!!!!!!!!!!!!!!!!!!!!!
+start l0:0, start File: 256, end: 562536037
+total queue: 128, topfs queue: 120
+table_cache_size: 4194304
+InitializeOptions no_block_cache
+InitializeOptions
+4194304
+
+
+
+
+set ip 10.0.0.2
+set true 10.0.0.2
+
+set ip 11.0.0.7
+set ip 11.0.0.8
+set true 11.0.0.8
+set true 11.0.0.7
+set true 10.0.0.2
+
+set ip 10.0.0.4
+set ip 10.0.0.5
+set false 10.0.0.5
+set true 11.0.0.8
+set true 11.0.0.7
+set true 10.0.0.2
+set true 10.0.0.4
+
+set ip 11.0.0.9
+set ip 10.0.0.6
+set ip 11.0.0.10
+set false 10.0.0.5
+set false 11.0.0.9
+set false 11.0.0.7
+set false 10.0.0.4
+set true 10.0.0.2
+set true 11.0.0.8
+set true 10.0.0.6
+set true 11.0.0.10
+
+set false 10.0.0.5
+set false 10.0.0.2
+set false 11.0.0.8
+set false 11.0.0.9
+set true 10.0.0.6
+set true 11.0.0.10
+set true 10.0.0.4
+set true 11.0.0.7
+
+set false 10.0.0.5
+set false 11.0.0.10
+set false 10.0.0.6
+set false 11.0.0.9
+set true 11.0.0.7
+set true 11.0.0.8
+set true 10.0.0.2
+set true 10.0.0.4
+
+set false 10.0.0.2
+set false 11.0.0.9
+set false 10.0.0.4
+set false 11.0.0.8
+set true 11.0.0.7
+set true 10.0.0.5
+set true 10.0.0.6
+set true 11.0.0.10
+
+set false 10.0.0.2
+set false 10.0.0.5
+set false 10.0.0.4
+set false 10.0.0.6
+set true 11.0.0.9
+set true 11.0.0.7
+set true 11.0.0.8
+set true 11.0.0.10
+
+set false 11.0.0.9
+set false 11.0.0.8
+set false 10.0.0.4
+set false 10.0.0.5
+set true 11.0.0.7
+set true 11.0.0.10
+set true 10.0.0.2
+set true 10.0.0.6
+
+set false 10.0.0.4
+set false 11.0.0.9
+set false 10.0.0.6
+set false 10.0.0.2
+set true 11.0.0.8
+set true 10.0.0.5
+set true 11.0.0.7
+set true 11.0.0.10
+
+set false 10.0.0.4
+set false 10.0.0.6
+set false 11.0.0.9
+set false 11.0.0.10
+set true 11.0.0.7
+set true 10.0.0.5
+set true 10.0.0.2
+set true 11.0.0.8
+
+set false 10.0.0.6
+set false 11.0.0.7
+set false 11.0.0.10
+set false 10.0.0.2
+set true 10.0.0.4
+set true 11.0.0.8
+set true 11.0.0.9
+set true 10.0.0.5
+
+set false 11.0.0.7
+set false 10.0.0.6
+set false 10.0.0.5
+set false 11.0.0.9
+set true 11.0.0.10
+set true 10.0.0.2
+set true 11.0.0.8
+set true 10.0.0.4
+
+set false 11.0.0.10
+set false 11.0.0.8
+set false 11.0.0.7
+set false 10.0.0.5
+set true 10.0.0.2
+set true 11.0.0.9
+set true 10.0.0.4
+set true 10.0.0.6
+
+set false 10.0.0.4
+set false 10.0.0.5
+set false 11.0.0.9
+set false 11.0.0.10
+set true 10.0.0.6
+set true 11.0.0.7
+set true 11.0.0.8
+set true 10.0.0.2
+
+set false 10.0.0.2
+set false 11.0.0.10
+set false 10.0.0.6
+set false 11.0.0.7
+set true 10.0.0.4
+set true 11.0.0.9
+set true 10.0.0.5
+set true 11.0.0.8
+
+set false 10.0.0.6
+set false 10.0.0.2
+set false 11.0.0.7
+set false 10.0.0.5
+set true 10.0.0.4
+set true 11.0.0.9
+set true 11.0.0.10
+set true 11.0.0.8
+
+set false 11.0.0.7
+set false 10.0.0.5
+set false 11.0.0.8
+set false 10.0.0.6
+set true 11.0.0.10
+set true 11.0.0.9
+set true 10.0.0.4
+set true 10.0.0.2
+
+set false 10.0.0.4
+set false 10.0.0.6
+set false 10.0.0.2
+set false 11.0.0.9
+set true 11.0.0.10
+set true 10.0.0.5
+set true 11.0.0.7
+set true 11.0.0.8
+
+set false 10.0.0.4
+set false 10.0.0.5
+set false 11.0.0.10
+set false 10.0.0.6
+set true 11.0.0.9
+set true 11.0.0.7
+set true 11.0.0.8
+set true 10.0.0.2
+
+set false 11.0.0.7
+set false 10.0.0.2
+set false 10.0.0.4
+set false 10.0.0.5
+set true 11.0.0.8
+set true 11.0.0.9
+set true 10.0.0.6
+set true 11.0.0.10
+
+set false 11.0.0.8
+set false 10.0.0.4
+set false 11.0.0.10
+set false 10.0.0.2
+set true 11.0.0.7
+set true 11.0.0.9
+set true 10.0.0.5
+set true 10.0.0.6
+
+set false 10.0.0.6
+set false 11.0.0.9
+set false 11.0.0.8
+set false 10.0.0.4
+set true 11.0.0.7
+set true 10.0.0.2
+set true 10.0.0.5
+set true 11.0.0.10
+
+set ip 10.0.0.6
+set false 11.0.0.7
+set false 11.0.0.9
+set false 10.0.0.5
+set false 10.0.0.2
+set false 11.0.0.8
+set true 11.0.0.10
+set true 10.0.0.6
+set true 10.0.0.4
+set true 10.0.0.6
+

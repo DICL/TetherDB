@@ -1,0 +1,42 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+
+username=$( whoami )
+
+##
+# *** WORKLOAD CONFIGURATION ***
+recordcount=$((200*1000*1000))  # 200 M
+operationcount=$((20*1000*1000))  # 100 M
+scan_operationcount=$((10*1000*1000))  # 10 M
+field_len=100
+field_cnt=10  # value: 10*100 =~ 1 KB
+num_threads=32
+max_write_buffer_number=6  # 64MB * 16 = 1GB
+max_background_jobs=20
+
+##
+# build
+cd ../build
+cmake --build . -- -j
+cd -
+ycsb=../build/ycsb
+
+mkdir -p /lemma/rocksdb
+#sudo chown -R $username:$username /lemma/fio_local/rocksdb_$username
+
+for req_dist in "uniform"; do
+  # following this order: https://github.com/brianfrankcooper/YCSB/wiki/Core-Workloads#running-the-workloads
+  rm -rf /lemma/rocksdb/*  # clear db
+  $ycsb \
+    --recordcount=${recordcount} \
+    --operationcount=${operationcount} \
+    --fieldlength=${field_len} \
+    --fieldcount=${field_cnt} \
+    --threads=${num_threads} \
+    --workloads="l" \
+    --max_write_buffer_number=${max_write_buffer_number} \
+    --max_background_jobs=${max_background_jobs} \
+    --distribution=${req_dist}
+done

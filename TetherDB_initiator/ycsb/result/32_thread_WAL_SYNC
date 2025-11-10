@@ -1,0 +1,445 @@
+[100%] Built target ycsb
+/lemma2/rocksdb_local/ycsb/scripts
+OPEN DB /lemma/rocksdb
+Attaching to 10.0.0.90
+
+Attached to 10.0.0.90
+num_io_queues: 127
+Controller IO queue size: 512
+Own LRU Cache: 40
+Load...
+Load...1
+Load...2
+Throughput history is written to: /scratch/lemma/logs/rocksdb/load.throughput_history.0
+==================================================================
+-----------configuration------------
+Clients: 32
+WAL: 1, fsync: 0
+Data: /lemma/rocksdb
+WAL: /lemma/rocksdb
+Max_write_buffer_number: 6
+Max_background_jobs: 20
+High-priority backgd threds: 5
+Low-priority backgd threds: 15
+Max_subcompactions: 5
+Write_buffer_size: 64.000 MB
+-------------------------------------
+Load 200000000 requests in 783.791 seconds.
+Load latency: 124.125 us
+Load IOPS: 0.255 M
+Load median latency: 56.488 us
+Load P999: 4886.612us, P99: 2462.512us, P95: 88.475us, P90: 75.898us, P75: 63.211us
+------------------------------------------------------------------
+Load A - IOPS: 0.255 M
+==================================================================
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0     15/0   894.92 MB   3.8      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L1     19/0    1.10 GB   4.4      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L2    239/16  13.13 GB   4.9      0.0     0.0      0.0       0.0      0.0      54.5   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L3   1618/75  98.85 GB   3.8      0.0     0.0      0.0       0.0      0.0      10.5   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L4   1275/0   79.01 GB   0.3      0.0     0.0      0.0       0.0      0.0      45.6   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Sum   3166/91  192.97 GB   0.0      0.0     0.0      0.0       0.0      0.0     110.5   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       1.2   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Uptime(secs): 800.7 total, 200.7 interval
+Flush(GB): cumulative 0.000, interval 0.000
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Interval compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Stalls(count): 2617 level0_slowdown, 2577 level0_slowdown_with_compaction, 0 level0_numfiles, 0 level0_numfiles_with_compaction, 0 stop for pending_compaction_bytes, 0 slowdown for pending_compaction_bytes, 0 memtable_compaction, 0 memtable_slowdown, interval 667 total count
+
+** File Read Latency Histogram By Level [default] **
+
+** DB Stats **
+Uptime(secs): 800.7 total, 200.7 interval
+Cumulative writes: 200M writes, 200M keys, 13M commit groups, 15.3 writes per commit group, ingest: 191.51 GB, 244.93 MB/s
+Cumulative WAL: 200M writes, 0 syncs, 200000000.00 writes per sync, written: 191.51 GB, 244.93 MB/s
+Cumulative stall: 00:05:7.595 H:M:S, 38.4 percent
+Interval writes: 37M writes, 37M keys, 2548K commit groups, 14.7 writes per commit group, ingest: 36775.38 MB, 183.26 MB/s
+Interval WAL: 37M writes, 0 syncs, 37503685.00 writes per sync, written: 35.91 MB, 183.26 MB/s
+Interval stall: 00:01:32.538 H:M:S, 46.1 percent
+
+loading workload (6666666)...
+10%...20%...30%...40%...50%...60%...70%...80%...90%...
+loading workload finished in 4.949 s
+start time: 2023/09/01-03:10:44.801849
+starting requests...
+end time: 2023/09/01-03:14:07.517905
+Throughput history is written to: /scratch/lemma/logs/rocksdb/ycsb_a-uniform.throughput_history.1
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L1     16/0   811.65 MB   3.2      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L2     90/0    4.68 GB   1.9      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L3    778/0   46.40 GB   1.9      0.0     0.0      0.0       0.0      0.0       0.2   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L4   2340/0   144.18 GB   0.6      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Sum   3224/0   196.05 GB   0.0      0.0     0.0      0.0       0.0      0.0       0.2   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.2   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Uptime(secs): 208.0 total, 208.0 interval
+Flush(GB): cumulative 0.000, interval 0.000
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Interval compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Stalls(count): 0 level0_slowdown, 0 level0_slowdown_with_compaction, 0 level0_numfiles, 0 level0_numfiles_with_compaction, 0 stop for pending_compaction_bytes, 0 slowdown for pending_compaction_bytes, 0 memtable_compaction, 0 memtable_slowdown, interval 0 total count
+
+** File Read Latency Histogram By Level [default] **
+
+** DB Stats **
+Uptime(secs): 208.0 total, 208.0 interval
+Cumulative writes: 3332K writes, 3332K keys, 288K commit groups, 11.6 writes per commit group, ingest: 3.19 GB, 15.72 MB/s
+Cumulative WAL: 3332K writes, 288K syncs, 11.56 writes per sync, written: 3.19 GB, 15.72 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 3332K writes, 3332K keys, 288K commit groups, 11.6 writes per commit group, ingest: 3268.76 MB, 15.72 MB/s
+Interval WAL: 3332K writes, 288K syncs, 11.56 writes per sync, written: 3.19 MB, 15.72 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+==================================================================
+-----------configuration------------
+Clients: 32
+WAL: 1, fsync: 1
+Data: /lemma/rocksdb
+WAL: /lemma/rocksdb
+Max_write_buffer_number: 6
+Max_background_jobs: 20
+High-priority backgd threds: 5
+Low-priority backgd threds: 15
+Max_subcompactions: 5
+Write_buffer_size: 64.000 MB
+-------------------------------------
+WAL sync time per request: 28.131 us
+Wait time: 690.309 us
+Write delay time: 0.000 us
+Write memtable time: 1.587
+Finish 6666666 requests in 202.716 seconds.
+read num: 3333890, read avg latency: 449.149 us, read median latency: 287.895 us
+read P999: 5686.302 us, P99: 2365.291 us, P95: 1136.350 us, P90: 692.561 us, P75: 401.350 us
+update num: 3332776, update avg latency: 1492.409 us, update median latency: 628.016 us
+update P999: 59013.718 us, P99: 16965.459 us, P95: 5230.943us, P90: 2563.138 us, P75: 854.244 us
+Work latency: 970.692 us
+Work IOPS: 0.033 M
+Work median latency: 462.123 us
+Work P999: 39097.741us, P99: 11438.200us, P95: 2743.913us, P90: 1290.046us, P75: 684.344us
+Block read time: 392.871 us
+submit_time: 0.000
+------------------------------------------------------------------
+Workload A Uniform - IOPS: 0.033 M
+==================================================================
+loading workload (20000000)...
+10%...20%...30%...40%...50%...60%...70%...80%...90%...
+loading workload finished in 14.945 s
+start time: 2023/09/01-03:14:25.153214
+starting requests...
+end time: 2023/09/01-03:20:13.043560
+Throughput history is written to: /scratch/lemma/logs/rocksdb/ycsb_a-uniform.throughput_history.2
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      1/0   59.10 MB   0.2      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L1      9/0   492.61 MB   1.9      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L2     92/0    4.73 GB   1.9      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L3    789/0   45.48 GB   1.8      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L4   2470/0   151.94 GB   0.6      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Sum   3361/0   202.68 GB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Uptime(secs): 363.0 total, 174.0 interval
+Flush(GB): cumulative 0.000, interval 0.000
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Interval compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Stalls(count): 0 level0_slowdown, 0 level0_slowdown_with_compaction, 0 level0_numfiles, 0 level0_numfiles_with_compaction, 0 stop for pending_compaction_bytes, 0 slowdown for pending_compaction_bytes, 0 memtable_compaction, 0 memtable_slowdown, interval 0 total count
+
+** File Read Latency Histogram By Level [default] **
+
+** DB Stats **
+Uptime(secs): 363.0 total, 174.0 interval
+Cumulative writes: 9996K writes, 9996K keys, 837K commit groups, 11.9 writes per commit group, ingest: 9.57 GB, 27.01 MB/s
+Cumulative WAL: 9996K writes, 837K syncs, 11.94 writes per sync, written: 9.57 GB, 27.01 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 4723K writes, 4723K keys, 415K commit groups, 11.4 writes per commit group, ingest: 4633.28 MB, 26.63 MB/s
+Interval WAL: 4723K writes, 415K syncs, 11.36 writes per sync, written: 4.52 MB, 26.63 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+==================================================================
+-----------configuration------------
+Clients: 32
+WAL: 1, fsync: 1
+Data: /lemma/rocksdb
+WAL: /lemma/rocksdb
+Max_write_buffer_number: 6
+Max_background_jobs: 20
+High-priority backgd threds: 5
+Low-priority backgd threds: 15
+Max_subcompactions: 5
+Write_buffer_size: 64.000 MB
+-------------------------------------
+WAL sync time per request: 16.173 us
+Wait time: 376.462 us
+Write delay time: 0.000 us
+Write memtable time: 1.598
+Finish 20000000 requests in 347.890 seconds.
+read num: 10003109, read avg latency: 269.520 us, read median latency: 248.633 us
+read P999: 1327.557 us, P99: 867.147 us, P95: 537.810 us, P90: 440.282 us, P75: 335.284 us
+update num: 9996891, update avg latency: 840.427 us, update median latency: 598.155 us
+update P999: 12363.397 us, P99: 9343.172 us, P95: 1296.838us, P90: 1025.348 us, P75: 740.429 us
+Work latency: 554.884 us
+Work IOPS: 0.057 M
+Work median latency: 422.666 us
+Work P999: 11662.501us, P99: 4595.491us, P95: 1041.509us, P90: 805.738us, P75: 617.288us
+Block read time: 215.488 us
+submit_time: 0.000
+------------------------------------------------------------------
+Workload A Uniform - IOPS: 0.057 M
+==================================================================
+loading workload (20000000)...
+10%...20%...30%...40%...50%...60%...70%...80%...90%...
+loading workload finished in 14.069 s
+start time: 2023/09/01-03:20:35.991154
+starting requests...
+end time: 2023/09/01-03:22:36.239141
+Throughput history is written to: /scratch/lemma/logs/rocksdb/ycsb_b-uniform.throughput_history.0
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      4/0   236.84 MB   1.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L1      7/0   343.48 MB   1.3      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L2     74/1    3.93 GB   1.5      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L3    685/6   39.28 GB   1.6      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L4   2596/0   159.22 GB   0.6      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Sum   3366/7   203.00 GB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Uptime(secs): 135.1 total, 135.1 interval
+Flush(GB): cumulative 0.000, interval 0.000
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Interval compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Stalls(count): 0 level0_slowdown, 0 level0_slowdown_with_compaction, 0 level0_numfiles, 0 level0_numfiles_with_compaction, 0 stop for pending_compaction_bytes, 0 slowdown for pending_compaction_bytes, 0 memtable_compaction, 0 memtable_slowdown, interval 0 total count
+
+** File Read Latency Histogram By Level [default] **
+
+** DB Stats **
+Uptime(secs): 135.1 total, 135.1 interval
+Cumulative writes: 1000K writes, 1000K keys, 333K commit groups, 3.0 writes per commit group, ingest: 0.96 GB, 7.28 MB/s
+Cumulative WAL: 1000K writes, 333K syncs, 3.00 writes per sync, written: 0.96 GB, 7.28 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 1000K writes, 1000K keys, 333K commit groups, 3.0 writes per commit group, ingest: 984.43 MB, 7.28 MB/s
+Interval WAL: 1000K writes, 333K syncs, 3.00 writes per sync, written: 0.96 MB, 7.28 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+==================================================================
+-----------configuration------------
+Clients: 32
+WAL: 1, fsync: 1
+Data: /lemma/rocksdb
+WAL: /lemma/rocksdb
+Max_write_buffer_number: 6
+Max_background_jobs: 20
+High-priority backgd threds: 5
+Low-priority backgd threds: 15
+Max_subcompactions: 5
+Write_buffer_size: 64.000 MB
+-------------------------------------
+WAL sync time per request: 5.590 us
+Wait time: 40.171 us
+Write delay time: 0.000 us
+Write memtable time: 0.132
+Finish 20000000 requests in 120.248 seconds.
+read num: 18999171, read avg latency: 147.512 us, read median latency: 142.381 us
+read P999: 943.122 us, P99: 594.795 us, P95: 334.797 us, P90: 281.549 us, P75: 194.431 us
+update num: 1000829, update avg latency: 950.989 us, update median latency: 453.996 us
+update P999: 12474.983 us, P99: 10488.760 us, P95: 5757.018us, P90: 983.645 us, P75: 584.740 us
+Work latency: 187.719 us
+Work IOPS: 0.166 M
+Work median latency: 148.150 us
+Work P999: 9199.167us, P99: 797.065us, P95: 423.651us, P90: 318.498us, P75: 208.100us
+Block read time: 108.857 us
+submit_time: 0.000
+------------------------------------------------------------------
+Workload B Uniform - IOPS: 0.166 M
+==================================================================
+loading workload (20000000)...
+10%...20%...30%...40%...50%...60%...70%...80%...90%...
+loading workload finished in 13.986 s
+start time: 2023/09/01-03:22:59.621102
+starting requests...
+end time: 2023/09/01-03:24:30.978629
+Throughput history is written to: /scratch/lemma/logs/rocksdb/ycsb_c-uniform.throughput_history.0
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      4/0   236.84 MB   1.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L1      6/0   279.12 MB   1.1      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L2     61/0    3.20 GB   1.3      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L3    571/1   32.50 GB   1.3      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L4   2715/3   166.30 GB   0.7      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Sum   3357/4   202.50 GB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Uptime(secs): 106.0 total, 106.0 interval
+Flush(GB): cumulative 0.000, interval 0.000
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Interval compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Stalls(count): 0 level0_slowdown, 0 level0_slowdown_with_compaction, 0 level0_numfiles, 0 level0_numfiles_with_compaction, 0 stop for pending_compaction_bytes, 0 slowdown for pending_compaction_bytes, 0 memtable_compaction, 0 memtable_slowdown, interval 0 total count
+
+** File Read Latency Histogram By Level [default] **
+
+** DB Stats **
+Uptime(secs): 106.0 total, 106.0 interval
+Cumulative writes: 0 writes, 0 keys, 0 commit groups, 0.0 writes per commit group, ingest: 0.00 GB, 0.00 MB/s
+Cumulative WAL: 0 writes, 0 syncs, 0.00 writes per sync, written: 0.00 GB, 0.00 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 0 writes, 0 keys, 0 commit groups, 0.0 writes per commit group, ingest: 0.00 MB, 0.00 MB/s
+Interval WAL: 0 writes, 0 syncs, 0.00 writes per sync, written: 0.00 MB, 0.00 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+==================================================================
+-----------configuration------------
+Clients: 32
+WAL: 1, fsync: 1
+Data: /lemma/rocksdb
+WAL: /lemma/rocksdb
+Max_write_buffer_number: 6
+Max_background_jobs: 20
+High-priority backgd threds: 5
+Low-priority backgd threds: 15
+Max_subcompactions: 5
+Write_buffer_size: 64.000 MB
+-------------------------------------
+WAL sync time per request: 0.000 us
+Wait time: 0.000 us
+Write delay time: 0.000 us
+Write memtable time: 0.000
+Finish 20000000 requests in 91.358 seconds.
+read num: 20000000, read avg latency: 136.205 us, read median latency: 136.376 us
+read P999: 865.112 us, P99: 429.426 us, P95: 302.190 us, P90: 252.950 us, P75: 189.676 us
+update num: 0, update avg latency: 0 us, update median latency: 0 us
+update P999: 0 us, P99: 0 us, P95: 0 us, P90: 0 us, P75: 0 us
+Work latency: 136.205 us
+Work IOPS: 0.219 M
+Work median latency: 136.376 us
+Work P999: 865.112us, P99: 429.426us, P95: 302.190us, P90: 252.950us, P75: 189.676us
+Block read time: 93.334 us
+submit_time: 0.000
+------------------------------------------------------------------
+Workload C Uniform - IOPS: 0.219 M
+==================================================================
+loading workload (20000000)...
+10%...20%...30%...40%...50%...60%...70%...80%...90%...
+loading workload finished in 14.653 s
+start time: 2023/09/01-03:24:55.175106
+starting requests...
+end time: 2023/09/01-03:31:05.837430
+Throughput history is written to: /scratch/lemma/logs/rocksdb/ycsb_f-uniform.throughput_history.0
+
+
+** Compaction Stats [default] **
+Level    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  L0      2/0   117.79 MB   0.5      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L1      7/0   298.50 MB   1.2      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L2     71/0    3.54 GB   1.4      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L3    600/0   33.27 GB   1.3      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+  L4   2787/0   170.19 GB   0.7      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Sum   3467/0   207.40 GB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+ Int      0/0    0.00 KB   0.0      0.0     0.0      0.0       0.0      0.0       0.0   0.0      0.0      0.0      0.00              0.00         0    0.000       0      0
+
+** Compaction Stats [default] **
+Priority    Files   Size     Score Read(GB)  Rn(GB) Rnp1(GB) Write(GB) Wnew(GB) Moved(GB) W-Amp Rd(MB/s) Wr(MB/s) Comp(sec) CompMergeCPU(sec) Comp(cnt) Avg(sec) KeyIn KeyDrop
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Uptime(secs): 385.7 total, 227.1 interval
+Flush(GB): cumulative 0.000, interval 0.000
+AddFile(GB): cumulative 0.000, interval 0.000
+AddFile(Total Files): cumulative 0, interval 0
+AddFile(L0 Files): cumulative 0, interval 0
+AddFile(Keys): cumulative 0, interval 0
+Cumulative compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Interval compaction: 0.00 GB write, 0.00 MB/s write, 0.00 GB read, 0.00 MB/s read, 0.0 seconds
+Stalls(count): 0 level0_slowdown, 0 level0_slowdown_with_compaction, 0 level0_numfiles, 0 level0_numfiles_with_compaction, 0 stop for pending_compaction_bytes, 0 slowdown for pending_compaction_bytes, 0 memtable_compaction, 0 memtable_slowdown, interval 0 total count
+
+** File Read Latency Histogram By Level [default] **
+
+** DB Stats **
+Uptime(secs): 385.7 total, 227.1 interval
+Cumulative writes: 9998K writes, 9998K keys, 970K commit groups, 10.3 writes per commit group, ingest: 9.58 GB, 25.43 MB/s
+Cumulative WAL: 9998K writes, 970K syncs, 10.30 writes per sync, written: 9.58 GB, 25.43 MB/s
+Cumulative stall: 00:00:0.000 H:M:S, 0.0 percent
+Interval writes: 6063K writes, 6063K keys, 604K commit groups, 10.0 writes per commit group, ingest: 5948.03 MB, 26.20 MB/s
+Interval WAL: 6063K writes, 604K syncs, 10.03 writes per sync, written: 5.81 MB, 26.20 MB/s
+Interval stall: 00:00:0.000 H:M:S, 0.0 percent
+
+==================================================================
+-----------configuration------------
+Clients: 32
+WAL: 1, fsync: 1
+Data: /lemma/rocksdb
+WAL: /lemma/rocksdb
+Max_write_buffer_number: 6
+Max_background_jobs: 20
+High-priority backgd threds: 5
+Low-priority backgd threds: 15
+Max_subcompactions: 5
+Write_buffer_size: 64.000 MB
+-------------------------------------
+WAL sync time per request: 17.363 us
+Wait time: 332.208 us
+Write delay time: 0.000 us
+Write memtable time: 1.353
+Finish 20000000 requests in 370.662 seconds.
+read num: 10001245, read avg latency: 216.584 us, read median latency: 190.169 us
+read P999: 1078.705 us, P99: 755.124 us, P95: 435.597 us, P90: 360.120 us, P75: 274.182 us
+update num: 9998755, update avg latency: 960.133 us, update median latency: 721.379 us
+update P999: 12215.956 us, P99: 9733.478 us, P95: 1468.681us, P90: 1202.205 us, P75: 898.441 us
+Work latency: 588.312 us
+Work IOPS: 0.054 M
+Work median latency: 443.191 us
+Work P999: 11719.441us, P99: 5905.457us, P95: 1204.214us, P90: 966.462us, P75: 728.181us
+Block read time: 334.290 us
+submit_time: 0.000
+------------------------------------------------------------------
+Workload F Uniform - IOPS: 0.054 M
+==================================================================

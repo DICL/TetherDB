@@ -1,0 +1,2171 @@
+#pragma once
+
+#include <algorithm>
+#include <chrono>
+//#include "lru_cache.h"
+#include "port/likely.h"
+#include "port/port.h"
+#include "port/sys_time.h"
+#include "rocksdb/env.h"
+#include "rocksdb/file_system.h"//lemma
+#include "rocksdb/options.h"
+#include "rocksdb/status.h"
+#include "env/spdk_free_list.h"
+#include "lemma/spdk_device.h"
+#include "lemma/util.h"
+#include "util/cast_util.h"
+#include "util/coding.h"
+#include "util/murmurhash.h"
+#include "util/random.h"
+#include "util/rate_limiter.h"
+#include "utilities/lock_free_queue/disruptor_queue.h"
+#include "seg_lru_cache.h"
+//#include "hhvm_lru_cache.h"
+
+#include <queue>
+#include <condition_variable>
+
+#define HUGE_PAGE_SIZE (1 << 26)
+#define SPDK_PAGE_SIZE (4096)
+#define FILE_BUFFER_ENTRY_SIZE (1ull << 12)
+#define META_SIZE (1 << 20)
+//#define LO_START_LPN ((10ull << 30) / (SPDK_PAGE_SIZE))
+//#define LO_FILE_START (LO_START_LPN + (META_SIZE) / (SPDK_PAGE_SIZE))
+#define DISRUPTOR_QUEUE_LENGTH (64ull<<20)
+#if POS_IO
+#define LARGE_FILE_BUFFER_ENTRY_SIZE (1ull << 16)
+#endif
+namespace rocksdb {
+
+struct SPDKFileMeta;
+struct BufferPool;
+struct HugePage;
+struct LRUEntry;
+class SpdkFile;
+//class Semaphore;
+
+#if SMART_CACHE
+class Prefetcher;
+static Prefetcher *prefetcher_ = nullptr;
+#endif
+
+static ssdlogging::SPDKInfo *sp_info_ = nullptr;
+static int topfs_queue_num_ = 0;
+static int total_queue_num_ = 0;
+static uint64_t SPDK_MAX_LPN;
+static uint64_t LO_START_LPN;
+static uint64_t LO_FILE_START;
+
+static SPDKFreeList free_list;
+static HugePage *huge_pages_ = nullptr;
+static uint64_t SPDK_MEM_POOL_ENTRY_NUM;
+
+static TopFSCache<uint64_t, std::shared_ptr<LRUEntry>> *topfs_cache = nullptr;//lemma
+typedef DisruptorQueue<char *, DISRUPTOR_QUEUE_LENGTH> MemPool;
+static MemPool *spdk_mem_pool_ = nullptr;//lemma
+#if POS_IO
+static uint64_t SPDK_LARGE_MEM_POOL_ENTRY_NUM;
+static MemPool *spdk_large_mem_pool_ = nullptr;//lemma
+#endif
+
+typedef std::map<std::string, SPDKFileMeta *> FileMeta;
+typedef std::map<std::string, SpdkFile *> SPDKFileSystem;
+static FileMeta file_meta_;//lemma
+static SPDKFileSystem spdk_file_system_;//lemma
+static port::Mutex fs_mutex_;//lemma
+static port::Mutex meta_mutex_;//lemma
+static port::Mutex meta_write_mutex_;//lemma
+static char *meta_buffer_;//lemma
+static uint64_t spdk_tsc_rate_;
+static port::Mutex **spdk_queue_mutexes_ = nullptr;
+static uint64_t spdk_queue_id_ = 0;
+
+//static Semaphore* semaphore_;
+
+static void Exit();
+static void ExitError();
+
+#ifdef SPANDB_STAT
+static uint64_t read_hit_;
+static uint64_t read_miss_;
+static ssdlogging::statistics::AvgStat free_list_latency_;
+static ssdlogging::statistics::AvgStat write_latency_;
+static ssdlogging::statistics::AvgStat read_latency_;
+static ssdlogging::statistics::AvgStat read_miss_latency_;
+static ssdlogging::statistics::AvgStat read_hit_latency_;
+static ssdlogging::statistics::AvgStat read_disk_latency_;
+static ssdlogging::statistics::AvgStat memcpy_latency_;
+static ssdlogging::statistics::AvgStat test_latency_;
+static std::atomic<uint64_t> total_read_;
+static std::atomic<uint64_t> total_write_;
+static uint64_t last_total_write_;
+#endif
+//static ssdlogging::statistics::AvgStat write_delay_;
+//static ssdlogging::statistics::AvgStat read_delay_;
+//static uint64_t prefetch_true_;
+//static uint64_t prefetch_false_;
+
+#ifdef PRINT_STAT
+static std::mutex print_mutex_;
+static std::atomic<uint64_t> total_flush_written_;
+static std::atomic<uint64_t> total_compaction_written_;
+static std::atomic<uint64_t> last_print_flush_time_;
+static std::atomic<uint64_t> last_print_compaction_time_;
+static std::atomic<uint64_t> spdk_start_time_;
+#endif
+
+/*class Semaphore {
+ public:
+  Semaphore (int count_ = 0)
+  : count(count_) 
+  {
+  }
+    
+  inline void notify() {
+    std::unique_lock<std::mutex> lock(mtx);
+    count++;
+    //notify the waiting thread
+    cv.notify_one();
+  }
+  inline void wait() {
+    std::unique_lock<std::mutex> lock(mtx);
+    while(count == 0) {
+      //wait on the mutex until notify is called
+      cv.wait(lock);
+    }
+    count--;
+  }
+ private:
+  std::mutex mtx;
+  std::condition_variable cv;
+  int count;
+};*/
+
+struct HugePage {
+ public:
+  HugePage(uint64_t size)
+      : size_(size), hugepages_(nullptr), index_(0), offset_(0) {
+    page_num_ = size_ / HUGE_PAGE_SIZE;
+    if (size % HUGE_PAGE_SIZE != 0) page_num_++;
+    hugepages_ = new char *[page_num_];
+    fprintf(stderr, "SPDK memory allocation starts (%.2lf GB)\n",
+           size_ / 1024.0 / 1024.0 / 1024.0);
+    for (uint64_t i = 0; i < page_num_; i++) {
+      if (i % (uint64_t)(page_num_ * 0.2) == 0) {
+        fprintf(stderr, "...%.1f%%", i * 1.0 / page_num_ * 100);
+        fflush(stdout);
+      }
+      hugepages_[i] =
+          (char *)spdk_zmalloc(HUGE_PAGE_SIZE, SPDK_PAGE_SIZE, NULL,
+                               SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+      if (UNLIKELY(hugepages_[i] == nullptr)) {
+        printf("\n");
+        fprintf(stderr, "already allocated %.2lf GB\n",
+                HUGE_PAGE_SIZE * i / 1024.0 / 1024.0 / 1024.0);
+        fprintf(stderr, "%s:%d: SPDK allocate memory failed\n", __FILE__,
+                __LINE__);
+        ExitError();
+      }
+    }
+    fprintf(stderr, "...100%%\nSPDK memory allocation finished.\n");
+  };
+  char *Get(uint64_t size) {
+    assert(size <= HUGE_PAGE_SIZE);
+    if (HUGE_PAGE_SIZE - offset_ < size) {
+      index_++;
+      offset_ = 0;
+    }
+    if (index_ >= page_num_){
+      fprintf(stderr, "%s error \n", __FUNCTION__);
+      return nullptr;
+    }
+    char *data = hugepages_[index_] + offset_;
+    offset_ += size;
+    return data;
+  }
+  ~HugePage() {
+    for (uint64_t i = 0; i < page_num_; i++) {
+      if (hugepages_[i] != nullptr) spdk_free(hugepages_[i]);
+    }
+  }
+
+ private:
+  uint64_t size_;
+  uint64_t page_num_;
+  char **hugepages_;
+  uint64_t index_;
+  uint64_t offset_;
+};
+
+struct LRUEntry {
+  uint64_t key;
+  char *data;
+  LRUEntry(uint64_t k, char *d) : key(k), data(d) {}
+  ~LRUEntry() {spdk_mem_pool_->WriteInBuf(data);}
+};
+
+// file buffer entry
+struct FileBuffer {
+  int queue_id_;
+  uint64_t start_lpn_;
+  bool synced_;
+  bool readable_;
+  uint64_t start_time_;
+  std::mutex mutex_;
+  char *data_;
+  const uint64_t max_size_;
+  uint64_t written_offset_;
+#if SMART_CACHE
+  int status_;
+  std::shared_ptr<LRUEntry> buffer_cache_;
+  int refs_;
+  bool deleted_;
+#endif
+
+  explicit FileBuffer(uint64_t start_lpn, uint64_t max_size = FILE_BUFFER_ENTRY_SIZE)
+      : queue_id_(-1),
+        start_lpn_(start_lpn),
+        synced_(false),
+        readable_(false),
+        data_(nullptr),
+        max_size_(max_size),
+        written_offset_(0)
+#if SMART_CACHE
+        , status_(0)
+        , buffer_cache_(nullptr)
+        , refs_(1)
+        , deleted_(false)
+#endif
+        {}
+
+  IOStatus AllocateSPDKBuffer() {
+    if(spdk_mem_pool_->Length() < 100 && max_size_ == FILE_BUFFER_ENTRY_SIZE)
+      topfs_cache->Evict(100 - spdk_mem_pool_->Length());
+#if POS_IO
+    if(spdk_large_mem_pool_->Length() < 10 && max_size_ == LARGE_FILE_BUFFER_ENTRY_SIZE)
+      fprintf(stderr, "AllocateSPDKBuffer need more LARGE_FILE_BUFFER_ENTRY_SIZE\n");
+#endif
+#ifdef SPANDB_STAT
+    auto start = SPDK_TIME;
+#endif
+    assert(data_ == nullptr);
+    queue_id_ = -1;
+    readable_ = false;
+    synced_ = false;
+    assert(written_offset_ == 0);
+#if POS_IO
+    if (max_size_ == FILE_BUFFER_ENTRY_SIZE) {
+      //semaphore_->wait();
+      if (spdk_mem_pool_->Length() < 10)
+        fprintf(stderr, "spdk_mem_pool_->Length(): %lu\n", spdk_mem_pool_->Length());
+      data_ = spdk_mem_pool_->ReadValue();
+      //semaphore_->notify();
+    } else {
+      //semaphore_->wait();
+      if (spdk_large_mem_pool_->Length() < 10)
+        fprintf(stderr, "spdk_large_mem_pool_->Length(): %lu\n", spdk_large_mem_pool_->Length());
+      data_ = spdk_large_mem_pool_->ReadValue();
+      //semaphore_->notify();
+    }
+#else
+    //semaphore_->wait();
+    data_ = spdk_mem_pool_->ReadValue();
+    //semaphore_->notify();
+#endif
+
+
+#ifdef SPANDB_STAT
+    test_latency_.add(
+            SPDK_TIME_DURATION(start, SPDK_TIME, spdk_tsc_rate_));
+#endif
+    assert(data_ != nullptr);
+    return IOStatus::OK();
+  }
+
+  ~FileBuffer() {}
+
+  bool Full() {
+    assert(data_ != nullptr);
+    return written_offset_ == max_size_;
+  }
+  bool Empty() {
+    if (data_ == nullptr) return true;
+    return written_offset_ == 0;
+  }
+  size_t Append(const char *data, size_t size) {
+    size_t s = 0;
+    if (written_offset_ == max_size_) return s;
+    if (written_offset_ + size > max_size_)
+      s = max_size_ - written_offset_;
+    else
+      s = size;
+    memcpy(data_ + written_offset_, data, s);
+    written_offset_ += s;
+    return s;
+  }
+};
+
+struct SPDKFileMeta {
+  std::string fname_;
+  uint64_t start_lpn_;
+  uint64_t end_lpn_;
+  bool lock_file_;
+  uint64_t size_;
+  uint64_t modified_time_;
+  uint64_t last_access_time_;
+  bool readable_file;
+  int level_;
+  SPDKFileMeta(){};
+  SPDKFileMeta(std::string fname, uint64_t start, uint64_t end, bool lock_file)
+      : fname_(fname),
+        start_lpn_(start),
+        end_lpn_(end),
+        lock_file_(lock_file),
+        size_(0),
+        modified_time_(0),
+        last_access_time_(0),
+        readable_file(false), level_(0) {}
+  SPDKFileMeta(std::string fname, uint64_t start, uint64_t end, bool lock_file,
+               uint64_t size)
+      : fname_(fname),
+        start_lpn_(start),
+        end_lpn_(end),
+        lock_file_(lock_file),
+        size_(size),
+        modified_time_(0),
+        last_access_time_(0), level_(0) {}
+
+  uint64_t Size() { return size_; };
+
+  uint64_t ModifiedTime() { return modified_time_; }
+
+  void SetReadable(bool readable) { readable_file = readable; }
+
+  uint32_t Serialization(char *des) {
+    uint32_t offset = 0;
+    uint64_t size = fname_.size();
+    EncodeFixed64(des + offset, size);
+    offset += 8;
+    memcpy(des + offset, fname_.c_str(), size);
+    offset += size;
+    EncodeFixed64(des + offset, start_lpn_);
+    offset += 8;
+    EncodeFixed64(des + offset, end_lpn_);
+    offset += 8;
+    char lock = lock_file_ ? '1' : '0';
+    memcpy(des + offset, &lock, 1);
+    offset += 1;
+    EncodeFixed64(des + offset, size_);
+    offset += 8;
+    EncodeFixed64(des + offset, modified_time_);
+    offset += 8;
+    return offset;
+  }
+
+  uint32_t Deserialization(char *src) {
+    uint32_t offset = 0;
+    uint64_t size = 0;
+    size = DecodeFixed64(src + offset);
+    offset += 8;
+    fname_ = std::string(src + offset, size);
+    offset += fname_.size();
+    start_lpn_ = DecodeFixed64(src + offset);
+    offset += 8;
+    end_lpn_ = DecodeFixed64(src + offset);
+    offset += 8;
+    char lock;
+    memcpy(&lock, src + offset, 1);
+    lock_file_ = (lock == '1');
+    offset += 1;
+    size_ = DecodeFixed64(src + offset);
+    offset += 8;
+    modified_time_ = DecodeFixed64(src + offset);
+    offset += 8;
+    return offset;
+  }
+
+  std::string ToString() {
+    char out[200];
+    sprintf(out,
+            "FileName: %s, StartLPN: %ld, EndLPN: %ld, IsLock: %d, Size: %ld, "
+            "ModifiedTime: %ld\n",
+            fname_.c_str(), start_lpn_, end_lpn_, lock_file_, size_,
+            modified_time_);
+    return std::string(out);
+  }
+};
+
+static void CheckComplete(ssdlogging::SPDKInfo *spdk, int queue_id) {
+  assert(queue_id != -1);
+  MutexLock lock(spdk_queue_mutexes_[queue_id]);
+  spdk_nvme_qpair_process_completions(spdk->namespaces->qpair[queue_id], 0);
+}
+
+#if SMART_CACHE
+class Prefetcher {
+ public:
+  Prefetcher() {
+    for (int i = 0; i < 3; i++) {
+      std::thread thread(&Prefetcher::PrefetchThread, this);
+      thread.detach();
+    }
+  }
+  void PrefetchThread() {
+    while (1) {
+      std::unique_lock<std::mutex> lk(prefetch_mtx_);
+      prefetch_cv_.wait(lk, [&] { return !prefetch_buffers_.empty();});
+      FileBuffer* buffer = prefetch_buffers_.front();
+      prefetch_buffers_.pop();
+      lk.unlock();
+      buffer->mutex_.lock();
+      buffer->refs_--;
+      if (buffer->status_ == 1) {
+        uint64_t count = 0;
+        while (!buffer->readable_) {
+          CheckComplete(sp_info_, buffer->queue_id_);
+          count++;
+          if (count > 1000000) {
+            count = 0;
+            usleep(100);
+          }
+        }
+        buffer->buffer_cache_.reset(new LRUEntry(buffer->start_lpn_, buffer->data_));
+        buffer->data_ = nullptr;
+        buffer->status_ = 0;
+        if(buffer->deleted_) { //
+          if(buffer->refs_ == 0) {
+            buffer->mutex_.unlock();
+            delete buffer;
+          } else {
+            buffer->mutex_.unlock();
+          }
+        } else { //
+          if(buffer->refs_ == 0) {
+            fprintf(stderr, "PrefetchThread something wrong!!!!\n");
+            buffer->buffer_cache_.reset();
+            buffer->buffer_cache_ = nullptr;
+            buffer->mutex_.unlock();
+            delete buffer;
+          } else {
+            topfs_cache->Insert(buffer->start_lpn_, buffer->buffer_cache_);
+            buffer->buffer_cache_.reset();
+            buffer->buffer_cache_ = nullptr;
+            buffer->mutex_.unlock();
+          }
+        }
+      } else {
+        if(buffer->refs_ == 0) {
+          buffer->mutex_.unlock();
+          delete buffer;
+        } else {
+          buffer->mutex_.unlock();
+        }
+      }
+    }
+  }
+  void InsertPretch(FileBuffer *buffer) {
+    prefetch_mtx_.lock();
+    prefetch_buffers_.push(buffer);
+    prefetch_mtx_.unlock();
+    prefetch_cv_.notify_one();
+  }
+  bool CheckInsert() {
+    if (prefetch_buffers_.size() > 1024) {
+      //prefetch_false_++;
+      return false;
+    } else {
+      //prefetch_true_++;
+      return true;
+    }
+  }
+ private:
+  std::queue<FileBuffer*> prefetch_buffers_;
+  std::mutex prefetch_mtx_;
+  std::condition_variable prefetch_cv_;
+};
+#endif
+
+static bool SPDKWrite(ssdlogging::SPDKInfo *spdk, FileBuffer *buf, int qid);
+
+void send_keep_alive(){
+  int count=0;
+  while(1) {
+//#ifdef SPANDB_STAT
+//    uint64_t tmp_write_count = total_write_.load();
+//    fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! write latency: %ld %.2lf us\n", write_latency_.size(),
+//         write_latency_.avg());
+//    write_latency_.reset();
+ //   fprintf(stderr, "total_read_: %lu, total_write_: %lu\n", total_read_.load(), tmp_write_count);
+//    fprintf(stderr, "####################################################################### write throughput %lu (blocks/s) \n", (tmp_write_count - last_total_write_)/9);
+//    last_total_write_ = tmp_write_count;
+//    total_read_.store(0);
+//#endif
+    //fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! write delay: %ld %.2lf us\n", write_delay_.size(),
+    //     write_delay_.avg());
+    //fprintf(stderr, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! read delay: %ld %.2lf us\n", read_delay_.size(),
+    //     read_delay_.avg());
+    //read_delay_.reset();
+    //fprintf(stderr, "prefetch_true_: %lu, prefetch_false_: %lu\n", prefetch_true_, prefetch_false_);
+    if (topfs_cache != nullptr){
+      if(count == 0)
+        topfs_cache->PrintHit(true);
+      else
+        topfs_cache->PrintHit(false);
+    }
+    if(count == 0)
+      spdk_nvme_ctrlr_process_admin_completions(sp_info_->controller);
+    count++;
+    count = count%5;
+    sleep(1);
+  }
+}
+
+__attribute__((unused)) static void Init(std::string pcie_addr, int logging_queue_num,
+                 int topfs_queue_num,  int cache_size) {
+  //write_delay_.reset();
+  //read_delay_.reset();
+  //prefetch_true_ = 0;
+  //prefetch_false_ = 0;
+  //semaphore_ = new Semaphore(39);
+  sp_info_ = ssdlogging::InitSPDK(pcie_addr, logging_queue_num);
+  {
+    std::thread t1(send_keep_alive);
+    t1.detach();
+  }
+  //SPDK_MAX_LPN =
+  //    ((uint64_t)(sp_info_->namespaces->capacity * 0.8)) / SPDK_PAGE_SIZE;
+  uint64_t total_cap = (uint64_t)(sp_info_->namespaces->capacity * 0.8) / SPDK_PAGE_SIZE;
+  LO_START_LPN = (MY_ID % MULTI_NUM) * (total_cap / MULTI_NUM);
+  SPDK_MAX_LPN = ((MY_ID % MULTI_NUM)+1) * (total_cap / MULTI_NUM) - 1;
+  LO_FILE_START = (LO_START_LPN + (META_SIZE) / (SPDK_PAGE_SIZE));
+  fprintf(stderr, "start l0:%lu, start File: %lu, end: %lu\n", LO_START_LPN, LO_FILE_START, SPDK_MAX_LPN);
+  spdk_tsc_rate_ = spdk_get_ticks_hz();
+  assert(sp_info_ != nullptr);
+  total_queue_num_ = sp_info_->num_io_queues;
+  topfs_queue_num_ = topfs_queue_num;
+  if (total_queue_num_ < topfs_queue_num_ + logging_queue_num + 1) {
+    fprintf(stderr,
+            "total queue num (%d) < topfs queue num (%d) + logging queue num (%d) "
+            "+ 1\n",
+            total_queue_num_, topfs_queue_num_, logging_queue_num);
+    fprintf(stderr, "one queue is dedicated for logging metadata\n");
+    ExitError();
+  }
+  fprintf(stderr, "total queue: %d, topfs queue: %d\n", total_queue_num_, topfs_queue_num_);
+
+  // 1.Allocate mem pool
+  if(DISRUPTOR_QUEUE_LENGTH * FILE_BUFFER_ENTRY_SIZE < cache_size * (1ull<<30)){
+    fprintf(stderr, "spdk memory pool size is smaller than cache size\n");
+    ExitError();
+  }
+#if POS_IO
+  huge_pages_ = new HugePage((cache_size+4) * (1ull << 30));// + (20 * HUGE_PAGE_SIZE));
+  SPDK_LARGE_MEM_POOL_ENTRY_NUM = (4 * (1ull << 30)) / LARGE_FILE_BUFFER_ENTRY_SIZE;//(20 * HUGE_PAGE_SIZE) / LARGE_FILE_BUFFER_ENTRY_SIZE;
+  spdk_large_mem_pool_ = new MemPool();
+  for (uint64_t i = 0; i < SPDK_LARGE_MEM_POOL_ENTRY_NUM; i++) {
+    char *buffer = huge_pages_->Get(LARGE_FILE_BUFFER_ENTRY_SIZE);
+    if (UNLIKELY(buffer == nullptr)) {
+      fprintf(stderr, "%s:%d: SPDK allocate memory failed\n", __FILE__,
+              __LINE__);
+      ExitError();
+    }
+    spdk_large_mem_pool_->WriteInBuf(buffer);
+  }
+#else
+  huge_pages_ = new HugePage((cache_size) * (1ull << 30));
+#endif
+
+  SPDK_MEM_POOL_ENTRY_NUM =  (cache_size * (1ull << 30)) / FILE_BUFFER_ENTRY_SIZE;
+  spdk_mem_pool_ = new MemPool();
+  for (uint64_t i = 0; i < SPDK_MEM_POOL_ENTRY_NUM; i++) {
+    char *buffer = huge_pages_->Get(FILE_BUFFER_ENTRY_SIZE);
+    if (UNLIKELY(buffer == nullptr)) {
+      fprintf(stderr, "%s:%d: SPDK allocate memory failed\n", __FILE__,
+              __LINE__);
+      ExitError();
+    }
+    spdk_mem_pool_->WriteInBuf(buffer);
+  }
+#if POS_CACHE
+  topfs_cache = new SegLRUCache<uint64_t, std::shared_ptr<LRUEntry>>(SPDK_MEM_POOL_ENTRY_NUM - 200, 1, spdk_nvme_ns_get_id(sp_info_->namespaces->ns));
+#else
+  topfs_cache = new SegLRUCache<uint64_t, std::shared_ptr<LRUEntry>>(SPDK_MEM_POOL_ENTRY_NUM - 200);
+#endif
+  fprintf(stderr, "SPDK_MEM_POOL_ENTRY_NUM - 200 %lu\n", SPDK_MEM_POOL_ENTRY_NUM - 200);
+  //topfs_cache = new HHVMLRUCache<uint64_t, std::shared_ptr<LRUEntry>>(SPDK_MEM_POOL_ENTRY_NUM - 2000);
+  // 2. Allocate meta buffer
+  meta_buffer_ = (char *)spdk_zmalloc(META_SIZE, SPDK_PAGE_SIZE, NULL,
+                                      SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+  if (UNLIKELY(meta_buffer_ == nullptr)) {
+    fprintf(stderr, "%s:%d: SPDK allocate memory failed\n", __FILE__, __LINE__);
+    ExitError();
+  }
+  // 3.Initialize queue mutex and  queue stat
+  spdk_queue_mutexes_ = new port::Mutex *[total_queue_num_];
+  for (int i = 0; i < total_queue_num_; i++) {
+    spdk_queue_mutexes_[i] = new port::Mutex();
+  }
+
+#if SMART_CACHE
+  prefetcher_ = new Prefetcher();
+#endif
+
+#ifdef PRINT_STAT
+  last_print_flush_time_.store(0);
+  last_print_compaction_time_.store(0);
+  spdk_start_time_.store(0);
+  total_flush_written_.store(0);
+  total_compaction_written_.store(0);
+#endif
+#ifdef SPANDB_STAT
+  total_read_.store(0);
+  total_write_.store(0);
+  last_total_write_ = 0;
+#endif
+}
+
+__attribute__((unused)) static void RemoveFromLRUCache(uint64_t start_lpn, uint64_t end_lpn) {
+  uint64_t start = start_lpn;
+  uint64_t interval = FILE_BUFFER_ENTRY_SIZE / SPDK_PAGE_SIZE;
+  while (start <= end_lpn) {
+    topfs_cache->DeleteKey(start);
+    start += interval;
+  }
+}
+
+static void ExitError() {
+  Exit();
+  exit(-1);
+}
+
+static uint64_t GetSPDKQueueID() {
+  //return total_queue_num_ -
+  //       (__sync_fetch_and_add(&spdk_queue_id_, 1) % topfs_queue_num_) - 1;
+  return __sync_fetch_and_add(&spdk_queue_id_, 1) % topfs_queue_num_;
+}
+
+static void WriteComplete(void *arg, const struct spdk_nvme_cpl *completion) {
+  FileBuffer *buf = (FileBuffer *)arg;
+  assert(buf->synced_ == false);
+  if (spdk_nvme_cpl_is_error(completion)) {
+    fprintf(stderr, "I/O error status: %s\n",
+            spdk_nvme_cpl_get_status_string(&completion->status));
+    fprintf(stderr, "%s:%d: Write I/O failed, aborting run\n", __FILE__,
+            __LINE__);
+    buf->synced_ = false;
+    ExitError();
+  }
+#ifdef SPANDB_STAT
+  write_latency_.add(
+      SPDK_TIME_DURATION(buf->start_time_, SPDK_TIME, spdk_tsc_rate_));
+#endif
+  buf->synced_ = true;
+  //lemma spandb_controller_.IncreaseLDWritten(FILE_BUFFER_ENTRY_SIZE);
+  //lemma spandb_controller_.IncreaseLDBgIO(FILE_BUFFER_ENTRY_SIZE);
+}
+
+static void ReadComplete(void *arg, const struct spdk_nvme_cpl *completion) {
+  FileBuffer *buf = (FileBuffer *)arg;
+  assert(buf->readable_ == false);
+  if (spdk_nvme_cpl_is_error(completion)) {
+    fprintf(stderr, "I/O error status: %s\n",
+            spdk_nvme_cpl_get_status_string(&completion->status));
+    fprintf(stderr, "%s:%d: Write I/O failed, aborting run\n", __FILE__,
+            __LINE__);
+    buf->readable_ = false;
+    ExitError();
+  }
+  buf->readable_ = true;
+  //lemma spandb_controller_.IncreaseLDRead(FILE_BUFFER_ENTRY_SIZE);
+}
+
+static bool SPDKWrite(ssdlogging::SPDKInfo *spdk, FileBuffer *buf, int qid = -1) {
+  assert(buf != NULL);
+  assert(buf->synced_ == false);
+  assert(buf->data_ != NULL);
+  uint64_t sec_per_page = SPDK_PAGE_SIZE / spdk->namespaces->sector_size;
+  uint64_t lba = buf->start_lpn_ * sec_per_page;
+  uint64_t size = buf->max_size_;
+  if (size % SPDK_PAGE_SIZE != 0)
+    size = (size / SPDK_PAGE_SIZE + 1) * SPDK_PAGE_SIZE;
+  uint64_t sec_num = size / SPDK_PAGE_SIZE * sec_per_page;
+  int queue_id;
+  if(qid != -1)
+    queue_id = qid;
+  else
+    queue_id = GetSPDKQueueID();
+  //int queue_id = GetSPDKQueueID();
+  buf->queue_id_ = queue_id;
+#ifdef SPANDB_STAT
+  buf->start_time_ = SPDK_TIME;
+  total_write_.fetch_add(1);
+#endif
+  // printf("write lba: %ld, size: %ld sectors, queue: %d\n", lba, sec_num, queue_id);
+  int rc = 0;
+  {
+    MutexLock lock(spdk_queue_mutexes_[queue_id]);
+    rc = spdk_nvme_ns_cmd_write(spdk->namespaces->ns,
+                                spdk->namespaces->qpair[queue_id], buf->data_,
+                                lba,     /* LBA start */
+                                sec_num, /* number of LBAs */
+                                WriteComplete, buf, 0);
+  }
+  if (rc != 0) {
+    fprintf(stderr, "%s:%d: SPDK IO failed: %s !!%d\n", __FILE__, __LINE__,
+            strerror(rc * -1), buf->data_ == nullptr);
+    ExitError();
+  }
+  return true;
+}
+
+static bool SPDKRead(ssdlogging::SPDKInfo *spdk, FileBuffer *buf) {
+  // ssdlogging::ns_entry* namespace = spdk->namespaces;
+#ifdef SPANDB_STAT
+  total_read_.fetch_add(1);
+#endif
+  assert(buf != NULL);
+  assert(buf->readable_ == false);
+  assert(buf->data_ != NULL);
+  uint64_t sec_per_page = SPDK_PAGE_SIZE / spdk->namespaces->sector_size;
+  uint64_t lba = buf->start_lpn_ * sec_per_page;
+  uint64_t sec_num = buf->max_size_ / SPDK_PAGE_SIZE * sec_per_page;
+  int queue_id = GetSPDKQueueID();
+  // printf("read lba: %ld, size: %ld sectors, queue: %d\n", lba, sec_num, queue_id);
+  buf->queue_id_ = queue_id;
+  int rc = 0;
+  {
+    MutexLock lock(spdk_queue_mutexes_[queue_id]);
+    rc = spdk_nvme_ns_cmd_read(spdk->namespaces->ns,
+                               spdk->namespaces->qpair[queue_id], buf->data_,
+                               lba,     /* LBA start */
+                               sec_num, /* number of LBAs */
+                               ReadComplete, buf, 0);
+  }
+  if (rc != 0) {
+    fprintf(stderr, "%s:%d: SPDK IO failed: %s\n", __FILE__, __LINE__,
+            strerror(rc * -1));
+    ExitError();
+  }
+  return true;
+}
+
+static void SPDKWriteSync(ssdlogging::SPDKInfo *spdk, char *buf, uint64_t lpn,
+                          uint64_t size) {
+#ifdef SPANDB_STAT
+  total_write_.fetch_add(1);
+#endif
+  assert(size % SPDK_PAGE_SIZE == 0);
+  uint64_t sec_per_page = SPDK_PAGE_SIZE / spdk->namespaces->sector_size;
+  uint64_t lba = lpn * sec_per_page;
+  uint64_t sec_num = size / SPDK_PAGE_SIZE * sec_per_page;
+  int queue_id = GetSPDKQueueID();
+  bool flag = false;
+  int rc = 0;
+  {
+    MutexLock lock(spdk_queue_mutexes_[queue_id]);
+    rc = spdk_nvme_ns_cmd_write(
+        spdk->namespaces->ns, spdk->namespaces->qpair[queue_id], buf,
+        lba,
+        sec_num,
+        [](void *arg, const struct spdk_nvme_cpl *completion) -> void {
+          bool *finished = (bool *)arg;
+          if (UNLIKELY(spdk_nvme_cpl_is_error(completion))) {
+            fprintf(stderr, "I/O error status: %s\n",
+                    spdk_nvme_cpl_get_status_string(&completion->status));
+            fprintf(stderr, "%s:%d: Write I/O failed, aborting run\n", __FILE__,
+                    __LINE__);
+            *finished = true;
+            ExitError();
+          }
+          *finished = true;
+        },
+        &flag, 0);
+  }
+  if (rc != 0) {
+    fprintf(stderr, "%s:%d: SPDK IO failed: %s\n", __FILE__, __LINE__,
+            strerror(rc * -1));
+    ExitError();
+  }
+  uint64_t count = 0;
+  while (!flag) {
+    CheckComplete(sp_info_, queue_id);
+    count++;
+    if (count > 1000000) {
+      count = 0;
+      usleep(100);
+    }
+  }
+}
+
+static void SPDKReadSync(ssdlogging::SPDKInfo *spdk, char *buf, uint64_t lpn,
+                         uint64_t size) {
+#ifdef SPANDB_STAT
+  total_read_.fetch_add(1);
+#endif
+  uint64_t sec_per_page = SPDK_PAGE_SIZE / spdk->namespaces->sector_size;
+  uint64_t lba = lpn * sec_per_page;
+  uint64_t sec_num = size / SPDK_PAGE_SIZE * sec_per_page;
+  int queue_id = GetSPDKQueueID();
+  bool flag = false;
+  int rc = 0;
+  {
+    MutexLock lock(spdk_queue_mutexes_[queue_id]);
+    rc = spdk_nvme_ns_cmd_read(
+        spdk->namespaces->ns, spdk->namespaces->qpair[queue_id], buf,
+        lba,
+        sec_num,
+        [](void *arg, const struct spdk_nvme_cpl *completion) -> void {
+          bool *finished = (bool *)arg;
+          if (UNLIKELY(spdk_nvme_cpl_is_error(completion))) {
+            fprintf(stderr, "I/O error status: %s\n",
+                    spdk_nvme_cpl_get_status_string(&completion->status));
+            fprintf(stderr, "%s:%d: Write I/O failed, aborting run\n", __FILE__,
+                    __LINE__);
+            *finished = true;
+            ExitError();
+          }
+          *finished = true;
+        },
+        &flag, 0);
+  }
+  if (rc != 0) {
+    fprintf(stderr, "%s:%d: SPDK IO failed: %s\n", __FILE__, __LINE__,
+              strerror(rc * -1));
+    ExitError();
+  }
+  uint64_t count = 0;
+  while (!flag) {
+    CheckComplete(sp_info_, queue_id);
+    count++;
+    if (count > 1000000) {
+      count = 0;
+      usleep(100);
+    }
+  }
+}
+
+static void WriteMeta(FileMeta *file_meta) {
+  assert(meta_buffer_ != nullptr);
+  uint64_t size = 0;
+  {
+    MutexLock lock(&meta_mutex_);
+#if DEBUG_PRINT
+    fprintf(stderr, "!!! meta_mutex_ WriteMeta\n");//lemma_print
+#endif
+    EncodeFixed32(meta_buffer_, (uint32_t)file_meta->size());
+    size += 4;
+    // printf("---------------------\n");
+    // printf("write meta num: %ld\n", file_meta->size());
+    for (auto &meta : *file_meta) {
+      size += meta.second->Serialization(meta_buffer_ + size);
+      // printf("%s\n", meta.second->ToString().c_str());
+    }
+    // printf("---------------------\n");
+  }
+  if (size % SPDK_PAGE_SIZE != 0)
+    size = (size / SPDK_PAGE_SIZE + 1) * SPDK_PAGE_SIZE;
+  assert(size <= META_SIZE);
+  if (UNLIKELY(size > META_SIZE)) {
+    fprintf(stderr, "%s:%d: Metadata size is too big\n", __FILE__, __LINE__);
+    ExitError();
+  }
+  MutexLock lock(&meta_write_mutex_);
+#if DEBUG_PRINT
+  fprintf(stderr, "!!! meta_write_mutex_ WriteMeta\n");//lemma_print
+#endif
+  SPDKWriteSync(sp_info_, meta_buffer_, LO_START_LPN, size);
+}
+
+static std::string SplitFname(std::string path) {
+  std::size_t found = path.find_last_of("/");
+  return path.substr(found + 1);
+}
+
+/*
+__attribute__((unused)) static void ReadMeta(FileMeta *file_meta,
+                                             std::string dbpath) {
+  SPDKReadSync(sp_info_, meta_buffer_, LO_START_LPN, META_SIZE);
+  uint64_t offset = 0;
+  uint32_t meta_num = DecodeFixed32(meta_buffer_ + offset);
+  offset += 4;
+  for (uint32_t i = 0; i < meta_num; i++) {
+    assert(offset < META_SIZE);
+    SPDKFileMeta *meta = new SPDKFileMeta();
+    offset += meta->Deserialization(meta_buffer_ + offset);
+    meta->fname_ = dbpath + "/" + SplitFname(meta->fname_);
+    (*file_meta)[meta->fname_] = meta;
+  }
+}*/
+
+class SpdkFile {
+ public:
+  explicit SpdkFile(Env *env, const std::string &fname, SPDKFileMeta *metadata,
+                    uint64_t allocate_size, uint64_t _FILE_BUFFER_ENTRY_SIZE = FILE_BUFFER_ENTRY_SIZE, bool is_flush = false, bool is_full_use = false)
+      : env_(env),
+        fname_(fname),
+        rnd_(static_cast<uint32_t>(
+            MurmurHash(fname.data(), static_cast<int>(fname.size()), 0))),
+        current_buf_index_(0),
+        //last_sync_index_(-1),
+        last_sync_index_(0),
+        refs_(0),
+        metadata_(metadata),
+        is_flush_(is_flush),
+        allocated_buffer(0),
+        FILE_BUFFER_ENTRY_SIZE_(_FILE_BUFFER_ENTRY_SIZE) {
+    //printf("create spdk file fname: %s\n", fname_.c_str());
+    uint64_t current_page = metadata->start_lpn_;
+    //uint64_t pages_per_buffer = FILE_BUFFER_ENTRY_SIZE / SPDK_PAGE_SIZE;
+    start_lpn_ = metadata->start_lpn_;
+    pages_per_buffer_ = FILE_BUFFER_ENTRY_SIZE_ / SPDK_PAGE_SIZE;
+    file_buffer_num_ = allocate_size / FILE_BUFFER_ENTRY_SIZE_;
+    if (allocate_size % FILE_BUFFER_ENTRY_SIZE_ != 0) file_buffer_num_++;
+    // printf("open spdkfile: %s\n", metadata_->ToString().c_str());
+    // printf("file_buffer_num_: %ld\n", file_buffer_num_);
+    file_buffer_ = new FileBuffer*[file_buffer_num_];
+    if(is_full_use) {
+      for (uint64_t i = 0; i < file_buffer_num_; i++) {
+        file_buffer_[i] = new FileBuffer(current_page, FILE_BUFFER_ENTRY_SIZE_);
+        current_page += pages_per_buffer_;
+      }
+      if(is_full_use) is_full_use = false;
+    } else {
+      for (uint64_t i = 0; i < file_buffer_num_; i++) {
+        file_buffer_[i] = nullptr;
+      }
+    }
+    if (fname_[fname_.size()-1] == 't' || fname_[fname_.size()-1] == 'p')
+      is_sst_ = true;
+    else
+      is_sst_ = false;
+    // Ref();
+  }
+
+  int BufferSize() { return allocated_buffer.load(); }
+
+  SpdkFile(const SpdkFile &) = delete;  // No copying allowed.
+  void operator=(const SpdkFile &) = delete;
+
+  ~SpdkFile() {
+    assert(refs_ == 0);
+    if(refs_ != 0)
+      fprintf(stderr, "refs_ != 0 why???\n");
+    for (uint64_t i = 0; i < file_buffer_num_; i++) {
+#if SMART_CACHE
+      if (file_buffer_[i] != nullptr) {
+        file_buffer_[i]->mutex_.lock();
+        if (file_buffer_[i] != nullptr) {
+          file_buffer_[i]->refs_--;
+          if (file_buffer_[i]->refs_ < 0)
+            fprintf(stderr, "why?? file_buffer_->refs_ < 0 !!\n");
+          if (file_buffer_[i]->refs_ == 0) {
+            if (file_buffer_[i]->data_ != nullptr) {
+#if POS_IO
+              if (FILE_BUFFER_ENTRY_SIZE_ == FILE_BUFFER_ENTRY_SIZE) {
+                //fprintf(stderr, "~SpdkFile something wrong!!\n");
+                //spdk_mem_pool_->WriteInBuf(file_buffer_[i]->data_);
+                file_buffer_[i]->buffer_cache_.reset(new LRUEntry(file_buffer_[i]->start_lpn_, file_buffer_[i]->data_));
+                topfs_cache->Insert(file_buffer_[i]->start_lpn_, file_buffer_[i]->buffer_cache_, metadata_->level_ == 0, true);
+              } else {
+                /*if (fname_[fname_.size()-1] == 't') {
+                  if(spdk_mem_pool_->Length() < 100)
+                    topfs_cache->Evict(100 - spdk_mem_pool_->Length());
+                  char* data[LARGE_FILE_BUFFER_ENTRY_SIZE / FILE_BUFFER_ENTRY_SIZE];
+                  uint64_t s_lpn = file_buffer_[i]->start_lpn_;
+                  for (uint64_t k = 0; k < LARGE_FILE_BUFFER_ENTRY_SIZE / FILE_BUFFER_ENTRY_SIZE; k++) {
+                    data[k] = spdk_mem_pool_->ReadValue();
+                    memcpy(data[k], file_buffer_[i]->data_ + k*FILE_BUFFER_ENTRY_SIZE, FILE_BUFFER_ENTRY_SIZE);
+                    std::shared_ptr<LRUEntry> value;
+                    value.reset(new LRUEntry(s_lpn, data[k]));
+                    topfs_cache->Insert(s_lpn, value);
+                    s_lpn += FILE_BUFFER_ENTRY_SIZE/SPDK_PAGE_SIZE;*/
+                  /*for (uint64_t k = 0; k < LARGE_FILE_BUFFER_ENTRY_SIZE / FILE_BUFFER_ENTRY_SIZE; k++) {
+                    FileBuffer* tmp_buffer = new FileBuffer(file_buffer_[i]->start_lpn_ + (FILE_BUFFER_ENTRY_SIZE/SPDK_PAGE_SIZE)*k, FILE_BUFFER_ENTRY_SIZE);
+                    tmp_buffer->AllocateSPDKBuffer();
+                    memcpy(tmp_buffer->data_, file_buffer_[i]->data_ + k*FILE_BUFFER_ENTRY_SIZE, FILE_BUFFER_ENTRY_SIZE);
+                    tmp_buffer->buffer_cache_.reset(new LRUEntry(tmp_buffer->start_lpn_, tmp_buffer->data_));
+                    topfs_cache->Insert(tmp_buffer->start_lpn_, tmp_buffer->buffer_cache_);
+                    delete tmp_buffer;*/
+                //  }
+                //}
+                spdk_large_mem_pool_->WriteInBuf(file_buffer_[i]->data_);
+              }
+#else
+              spdk_mem_pool_->WriteInBuf(file_buffer_[i]->data_);
+#endif
+            }
+            file_buffer_[i]->mutex_.unlock();
+            delete file_buffer_[i];
+            file_buffer_[i] = nullptr;
+          } else {
+            file_buffer_[i]->deleted_ = true;
+            file_buffer_[i]->mutex_.unlock();
+          }
+        }
+      }
+#else
+      if (file_buffer_[i] != nullptr && file_buffer_[i]->data_ != nullptr) {
+        std::shared_ptr<LRUEntry> value(
+            new LRUEntry(file_buffer_[i]->start_lpn_, file_buffer_[i]->data_));
+        topfs_cache->Insert(file_buffer_[i]->start_lpn_, value, metadata_->level_ == 0, true);
+      }
+      delete file_buffer_[i];
+      file_buffer_[i] = nullptr;
+#endif
+    }
+    delete[] file_buffer_;
+    assert(file_meta_.find(fname_) != file_meta_.end());
+  }
+
+  void OpenForCompaction() {
+    uint64_t current_page = metadata_->start_lpn_;
+    MutexLock lock(&mutex_);
+    for (uint64_t i = 0; i < file_buffer_num_; i++) {
+      if (file_buffer_[i] == nullptr)
+        file_buffer_[i] = new FileBuffer(current_page, FILE_BUFFER_ENTRY_SIZE_);
+      current_page += pages_per_buffer_;
+    }
+  }
+
+  bool is_lock_file() const { return metadata_->lock_file_; }
+
+  bool Lock() {
+    assert(metadata_->lock_file_);
+    MutexLock lock(&mutex_);
+    if (locked_) {
+      return false;
+    } else {
+      locked_ = true;
+      return true;
+    }
+  }
+
+  void Unlock() {
+    assert(metadata_->lock_file_);
+    MutexLock lock(&mutex_);
+    locked_ = false;
+  }
+
+  uint64_t Size() const { return metadata_->size_; }
+
+  void Truncate(size_t size) {
+    MutexLock lock(&mutex_);
+    if(size) printf("\n");
+    fprintf(stderr, "%s:%d: SPDK File Truncate() not implemented\n", __FILE__,
+            __LINE__);
+  }
+
+  void CorruptBuffer() {
+    fprintf(stderr, "%s:%d: SPDK File CorruptBuffer() not implemented\n",
+            __FILE__, __LINE__);
+  }
+
+#if SMART_CACHE
+  IOStatus Prefetch(uint64_t offset, size_t n) {
+    size_t size = 0;
+    while (n > 0) {
+      uint64_t buffer_index = offset / FILE_BUFFER_ENTRY_SIZE_;
+      uint64_t buffer_offset = offset % FILE_BUFFER_ENTRY_SIZE_;
+      assert(buffer_index < file_buffer_num_);
+      if(buffer_index >= file_buffer_num_) {
+        fprintf(stderr, "Prefetch overflow !! buffer_index: %lu, file_buffer_num_: %lu\n", buffer_index, file_buffer_num_);
+        return IOStatus::OK();
+      }
+      if(file_buffer_[buffer_index] == nullptr) {
+        //fprintf(stderr, "file_buffer_[buffer_index] == nullptr 11\n");
+        //fprintf(stderr, "nullptr %s %s\n", fname_.c_str(), metadata_->fname_.c_str());
+        MutexLock lock(&mutex_);
+        if(file_buffer_[buffer_index] == nullptr)
+          file_buffer_[buffer_index] = new FileBuffer(start_lpn_ + pages_per_buffer_*buffer_index, FILE_BUFFER_ENTRY_SIZE_);
+      }
+      FileBuffer *buffer = file_buffer_[buffer_index];
+
+      if(buffer->status_ == 0) {
+        buffer->mutex_.lock();
+        if(buffer->status_ == 0) {
+          if (topfs_cache->Find(buffer->start_lpn_, buffer->buffer_cache_, true, -1)) {
+            buffer->buffer_cache_.reset();
+            buffer->buffer_cache_ = nullptr;
+          } else {
+            assert(buffer->data_ == nullptr);
+            if (prefetcher_->CheckInsert()) {
+              buffer->AllocateSPDKBuffer();
+              SPDKRead(sp_info_, buffer);
+          
+              buffer->status_ = 1;
+
+              buffer->refs_++;
+              prefetcher_->InsertPretch(buffer);
+            }
+          }
+        }
+        buffer->mutex_.unlock();
+      }
+
+      size_t s = 0;
+      if (buffer_offset + n <= FILE_BUFFER_ENTRY_SIZE_) {
+        s = n;
+      } else {
+        s = FILE_BUFFER_ENTRY_SIZE_ - buffer_offset;
+      }
+      size += s;
+      offset += s;
+      n -= s;
+    }
+    return IOStatus::OK();
+  }
+
+  IOStatus DIO_Read(uint64_t offset, size_t n, Slice *result, char *scratch) {
+    size_t size = 0;
+    char *ptr = scratch;
+    while (n > 0) {
+      uint64_t buffer_index = offset / FILE_BUFFER_ENTRY_SIZE;
+      uint64_t buffer_offset = offset % FILE_BUFFER_ENTRY_SIZE;
+      uint64_t buffer_entry_size;
+      if (buffer_offset + n > FILE_BUFFER_ENTRY_SIZE) {
+        buffer_entry_size = LARGE_FILE_BUFFER_ENTRY_SIZE;
+      } else {
+        buffer_entry_size = FILE_BUFFER_ENTRY_SIZE;
+      }
+      FileBuffer* buf = new FileBuffer(start_lpn_+buffer_index, buffer_entry_size);
+      buf->AllocateSPDKBuffer();
+      SPDKRead(sp_info_, buf);
+      //uint64_t count = 0;
+      while (!buf->readable_) {
+        CheckComplete(sp_info_, buf->queue_id_);
+        /*count++;
+        if (count > 1000000) {
+          count = 0;
+          usleep(100);
+        }*/
+      }
+      size_t s = 0;
+      if (buffer_offset + n <= buffer_entry_size) {
+        s = n;
+      } else {
+        s = buffer_entry_size - buffer_offset;
+      }
+      memcpy(ptr + size, buf->data_ + buffer_offset, s);
+      size += s;
+      offset += s;
+      n -= s;
+      if (buffer_entry_size == LARGE_FILE_BUFFER_ENTRY_SIZE)
+        spdk_large_mem_pool_->WriteInBuf(buf->data_);
+      else
+        spdk_mem_pool_->WriteInBuf(buf->data_);
+      delete buf;
+    }
+    *result = Slice(scratch, size);
+    return IOStatus::OK();
+  }
+
+  IOStatus Read(uint64_t offset, size_t n, Slice *result, char *scratch, bool is_seq = false, FSRandomAccessFile::AccessPattern pattern = FSRandomAccessFile::kNormal) {
+    if(FILE_BUFFER_ENTRY_SIZE_ != FILE_BUFFER_ENTRY_SIZE)
+      fprintf(stderr, "why??????????? READ FILE_BUFFER_ENTRY_SIZE_ %d\n", pattern == FSRandomAccessFile::kNormal);
+    //size_t og_n = n;
+    //auto start = SPDK_TIME;
+#ifdef SPANDB_STAT
+    auto start = SPDK_TIME;
+#endif
+    assert(scratch != nullptr);
+    size_t size = 0;
+    char *ptr = scratch;
+    while (n > 0) {
+#ifdef SPANDB_STAT
+      auto s_time = SPDK_TIME;
+      bool hit = false;
+#endif
+      uint64_t buffer_index = offset / FILE_BUFFER_ENTRY_SIZE_;
+      uint64_t buffer_offset = offset % FILE_BUFFER_ENTRY_SIZE_;
+      assert(buffer_index < file_buffer_num_);
+      if (buffer_offset + n > FILE_BUFFER_ENTRY_SIZE_ && buffer_index + 1 < file_buffer_num_) {
+        if(file_buffer_[buffer_index+1] == nullptr) {
+          MutexLock lock(&mutex_);
+          if(file_buffer_[buffer_index+1] == nullptr)
+            file_buffer_[buffer_index+1] = new FileBuffer(start_lpn_ + pages_per_buffer_*(buffer_index+1), FILE_BUFFER_ENTRY_SIZE_);
+        }
+        FileBuffer *next_buffer = file_buffer_[buffer_index+1];
+        if(next_buffer->mutex_.try_lock()) {
+          if (next_buffer->status_ == 0) {
+            if (topfs_cache->Find(next_buffer->start_lpn_, next_buffer->buffer_cache_, is_seq, metadata_->level_)) {
+              next_buffer->status_ = 2;
+            } else {
+              assert(next_buffer->data_ == nullptr);
+              next_buffer->AllocateSPDKBuffer();
+              SPDKRead(sp_info_, next_buffer);
+              next_buffer->status_ = 1;
+            }
+          }
+          next_buffer->mutex_.unlock();
+        }
+      }
+      if(buffer_index >= file_buffer_num_) {
+        fprintf(stderr, "buffer_index: %lu, file_buffer_num_: %lu\n", buffer_index, file_buffer_num_);
+      }
+      if(file_buffer_[buffer_index] == nullptr) {
+        //fprintf(stderr, "file_buffer_[buffer_index] == nullptr 33\n");
+        //fprintf(stderr, "nullptr %s %s\n", fname_.c_str(), metadata_->fname_.c_str());
+        MutexLock lock(&mutex_);
+        if(file_buffer_[buffer_index] == nullptr)
+          file_buffer_[buffer_index] = new FileBuffer(start_lpn_ + pages_per_buffer_*buffer_index, FILE_BUFFER_ENTRY_SIZE_);
+      }
+      FileBuffer *buffer = file_buffer_[buffer_index];
+      uint64_t lpn = buffer->start_lpn_;
+      char *data = nullptr;
+
+      buffer->mutex_.lock();
+      if (buffer->status_ == 2) {
+        if (buffer->buffer_cache_ == nullptr) {
+          fprintf(stderr, "read buffer state 3 something worng!!!!!\n");
+        } else {
+          data = buffer->buffer_cache_->data;
+#ifdef SPANDB_STAT
+          hit = true;
+#endif
+          if(!is_seq || pattern == FSRandomAccessFile::kWillNeed) {
+            buffer->status_ = 0;
+            buffer->buffer_cache_.reset();
+            buffer->buffer_cache_ = nullptr;
+          }
+        }
+      } else if (buffer->status_ == 0 && topfs_cache->Find(lpn, buffer->buffer_cache_, is_seq, metadata_->level_)) {
+        data = buffer->buffer_cache_->data;
+#ifdef SPANDB_STAT
+        hit = true;
+#endif
+        buffer->status_ = 2;
+
+        //if(lpn != buffer->buffer_cache_->key)
+        //  fprintf(stderr, "cache lpn wrong!!!!! %lu %lu\n", lpn, buffer->buffer_cache_->key);
+        //reset buffer_cache_
+        if(!is_seq || pattern == FSRandomAccessFile::kWillNeed) {
+          buffer->status_ = 0;
+          buffer->buffer_cache_.reset();
+          buffer->buffer_cache_ = nullptr;
+        }
+      } else {
+        if (buffer->status_ == 0) {
+          assert(buffer->data_ == nullptr);
+          buffer->AllocateSPDKBuffer();
+          SPDKRead(sp_info_, buffer);
+        }
+        uint64_t count = 0;
+        while (!buffer->readable_) {
+          CheckComplete(sp_info_, buffer->queue_id_);
+          count++;
+          if (count > 1000000) {
+            count = 0;
+            usleep(100);
+          }
+        }
+        buffer->buffer_cache_.reset(new LRUEntry(lpn, buffer->data_));
+        data = buffer->data_;
+        buffer->data_ = nullptr;
+        buffer->status_ = 2;
+
+        //reset buffer_cache_
+        if(!is_seq || pattern == FSRandomAccessFile::kWillNeed) {
+          topfs_cache->Insert(lpn, buffer->buffer_cache_, metadata_->level_ == 0);
+          buffer->status_ = 0;
+          buffer->buffer_cache_.reset();
+          buffer->buffer_cache_ = nullptr;
+        } else {
+          topfs_cache->Insert(lpn, buffer->buffer_cache_, metadata_->level_ == 0, true);
+        }
+      }
+      buffer->data_ = nullptr;
+      buffer->mutex_.unlock();
+
+//////////////////////////////////// read ahead /////////////////////////////////
+      if(is_seq) {
+        if(buffer_index + 16 < file_buffer_num_) {
+          if(file_buffer_[buffer_index+16] == nullptr) {
+            MutexLock lock(&mutex_);
+            if(file_buffer_[buffer_index+16] == nullptr)
+              file_buffer_[buffer_index+16] = new FileBuffer(start_lpn_ + pages_per_buffer_*(buffer_index+16), FILE_BUFFER_ENTRY_SIZE_);
+          }
+          FileBuffer *next_buffer = file_buffer_[buffer_index + 16];
+          if(next_buffer->mutex_.try_lock()) {
+            if (next_buffer->status_ == 0) {
+              if (topfs_cache->Find(next_buffer->start_lpn_, next_buffer->buffer_cache_, is_seq, metadata_->level_)) {
+                next_buffer->status_ = 2;
+              } else {
+                assert(next_buffer->data_ == nullptr);
+                next_buffer->AllocateSPDKBuffer();
+                SPDKRead(sp_info_, next_buffer);
+                next_buffer->status_ = 1;
+              }
+            }
+            next_buffer->mutex_.unlock();
+          }
+        }
+      }
+/////////////////////////////////////////////////////////////////////////////////
+
+      // copy to ptr
+      size_t s = 0;
+      if (buffer_offset + n <= FILE_BUFFER_ENTRY_SIZE_) {
+        s = n;
+      } else {
+        s = FILE_BUFFER_ENTRY_SIZE_ - buffer_offset;
+      }
+      memcpy(ptr + size, data + buffer_offset, s);
+      if (is_seq && is_sst_ && buffer_offset + n >= FILE_BUFFER_ENTRY_SIZE && pattern != FSRandomAccessFile::kWillNeed) {
+      //if (is_seq && is_sst_ && buffer_offset + n >= FILE_BUFFER_ENTRY_SIZE && og_n < 5000 && pattern != FSRandomAccessFile::kWillNeed) {
+        buffer->mutex_.lock();
+        if (buffer->status_ == 2) {
+          //topfs_cache->Insert(lpn, buffer->buffer_cache_);
+          buffer->buffer_cache_ = nullptr;
+          buffer->status_ = 0;
+        }
+        buffer->mutex_.unlock();
+      }
+      size += s;
+      offset += s;
+      n -= s;
+#ifdef SPANDB_STAT
+      if (hit) {
+        __sync_fetch_and_add(&read_hit_, 1);
+        read_hit_latency_.add(
+            SPDK_TIME_DURATION(s_time, SPDK_TIME, spdk_tsc_rate_));
+      } else {
+        __sync_fetch_and_add(&read_miss_, 1);
+        read_miss_latency_.add(SPDK_TIME_DURATION(s_time, SPDK_TIME, spdk_tsc_rate_));
+      }
+#endif
+    }
+    assert(n == 0);
+    *result = Slice(scratch, size);
+#ifdef SPANDB_STAT
+    read_latency_.add(SPDK_TIME_DURATION(start, SPDK_TIME, spdk_tsc_rate_));
+#endif
+    //read_delay_.add(SPDK_TIME_DURATION(start, SPDK_TIME, spdk_tsc_rate_));
+    return IOStatus::OK();
+  }
+
+#else////////////////SMART_CACHE
+
+  IOStatus Read(uint64_t offset, size_t n, Slice *result, char *scratch) {
+    //fprintf(stderr, "Spdk Read \n");
+#ifdef SPANDB_STAT
+    auto start = SPDK_TIME;
+#endif
+    assert(scratch != nullptr);
+    size_t size = 0;
+    char *ptr = scratch;
+    while (n > 0) {
+#ifdef SPANDB_STAT
+      auto s_time = SPDK_TIME;
+      bool hit = false;
+#endif
+      uint64_t buffer_index = offset / FILE_BUFFER_ENTRY_SIZE_;
+      uint64_t buffer_offset = offset % FILE_BUFFER_ENTRY_SIZE_;
+      if(buffer_index >= file_buffer_num_)
+        break;
+      assert(buffer_index < file_buffer_num_);
+      if(file_buffer_[buffer_index] == nullptr) {
+        MutexLock lock(&mutex_);
+        if(file_buffer_[buffer_index] == nullptr)
+          file_buffer_[buffer_index] = new FileBuffer(start_lpn_ + pages_per_buffer_*buffer_index, FILE_BUFFER_ENTRY_SIZE_);
+      }
+      FileBuffer *buffer = file_buffer_[buffer_index];
+      uint64_t lpn = buffer->start_lpn_;
+      char *data = nullptr;
+      std::shared_ptr<LRUEntry> value;
+      if (topfs_cache->Find(lpn, value, true, -1)) {
+        data = value->data;
+#ifdef SPANDB_STAT
+        hit = true;
+#endif
+      } else {
+        std::lock_guard<std::mutex> lk(buffer->mutex_);
+        if (topfs_cache->Find(lpn, value, true, -1)) {
+          data = value->data;
+#ifdef SPANDB_STAT
+          hit = true;
+#endif
+        } else {
+          assert(buffer->data_ == nullptr);
+          buffer->AllocateSPDKBuffer();
+          //if (thread_local_info_.GetName() == "Worker") {
+            //lemma spandb_controller_.IncreaseLDBgIO(FILE_BUFFER_ENTRY_SIZE);
+          //}
+#ifdef SPANDB_STAT
+          auto sss = SPDK_TIME;
+#endif
+          SPDKRead(sp_info_, buffer);
+          uint64_t count = 0;
+          while (!buffer->readable_) {
+            CheckComplete(sp_info_, buffer->queue_id_);
+            count++;
+            if (count > 1000000) {
+              count = 0;
+              usleep(100);
+            }
+          }
+#ifdef SPANDB_STAT
+          read_disk_latency_.add(
+              SPDK_TIME_DURATION(sss, SPDK_TIME, spdk_tsc_rate_));
+#endif
+          value.reset(new LRUEntry(lpn, buffer->data_));
+          topfs_cache->Insert(lpn, value);
+          data = buffer->data_;
+          buffer->data_ = nullptr;
+        }
+      }
+      assert(data != nullptr);
+      // copy to ptr
+      size_t s = 0;
+      if (buffer_offset + n <= FILE_BUFFER_ENTRY_SIZE_) {
+        s = n;
+      } else {
+        s = FILE_BUFFER_ENTRY_SIZE_ - buffer_offset;
+      }
+      memcpy(ptr + size, data + buffer_offset, s);
+      size += s;
+      offset += s;
+      n -= s;
+#ifdef SPANDB_STAT
+      if (hit) {
+        __sync_fetch_and_add(&read_hit_, 1);
+        read_hit_latency_.add(
+            SPDK_TIME_DURATION(s_time, SPDK_TIME, spdk_tsc_rate_));
+      } else {
+        __sync_fetch_and_add(&read_miss_, 1);
+        read_miss_latency_.add(SPDK_TIME_DURATION(s_time, SPDK_TIME, spdk_tsc_rate_));
+      }
+#endif
+    }
+    assert(n == 0);
+    *result = Slice(scratch, size);
+#ifdef SPANDB_STAT
+    read_latency_.add(SPDK_TIME_DURATION(start, SPDK_TIME, spdk_tsc_rate_));
+#endif
+    return IOStatus::OK();
+  }
+#endif//////////////SMART_CACHE
+
+  Status Write(uint64_t offset, const Slice &data) {
+    if(offset) printf("\n");
+    if(data.size()) printf("\n");
+    fprintf(stderr, "%s:%d: SPDK File Write() not implemented\n", __FILE__,
+            __LINE__);
+    return Status::OK();
+  }
+
+  IOStatus Append(const Slice &data) {
+    //auto start = SPDK_TIME;
+    metadata_->last_access_time_ = SPDK_TIME;
+    size_t left = data.size();
+    size_t written = 0;
+    //fprintf(stderr, "spdkfile append %s\n", fname_.c_str());
+    while (left > 0) {
+      if (UNLIKELY((uint64_t)current_buf_index_ >= file_buffer_num_)) {
+        fprintf(stderr,
+                "File size is too big. Allocate size: %lu, Current size: %lu, "
+                "write size: %lu(left: %lu)\n",
+                file_buffer_num_ * FILE_BUFFER_ENTRY_SIZE_, metadata_->size_,
+                data.size(), left);
+        return IOStatus::IOError("File is oversize when appending");
+      }
+      //fprintf(stderr, "fname: %s, write size: %ld, buf index: %lu\n",fname_.c_str(),
+      //     data.size(), current_buf_index_);
+      const char *dat = data.data() + written;
+      if (file_buffer_[current_buf_index_]->data_ == nullptr) {
+        IOStatus s = file_buffer_[current_buf_index_]->AllocateSPDKBuffer();
+        if (!s.ok()){
+          fprintf(stderr, "%s error\n", __FUNCTION__);
+          return s;
+        }
+        allocated_buffer.fetch_add(1);
+      }
+      size_t size = file_buffer_[current_buf_index_]->Append(dat, left);
+      file_buffer_[current_buf_index_]->readable_ = true;
+      left -= size;
+      written += size;
+      assert(left == 0 || file_buffer_[current_buf_index_]->Full());
+      if (file_buffer_[current_buf_index_]->Full()) {
+/*#if POS_IO
+        if (is_sst_) {
+          if(spdk_mem_pool_->Length() < 100)
+            topfs_cache->Evict(100 - spdk_mem_pool_->Length());
+          char* tmp_data[LARGE_FILE_BUFFER_ENTRY_SIZE / FILE_BUFFER_ENTRY_SIZE];
+          uint64_t s_lpn = file_buffer_[current_buf_index_]->start_lpn_;
+          for (uint64_t k = 0; k < LARGE_FILE_BUFFER_ENTRY_SIZE / FILE_BUFFER_ENTRY_SIZE; k++) {
+            tmp_data[k] = spdk_mem_pool_->ReadValue();
+            memcpy(tmp_data[k], file_buffer_[current_buf_index_]->data_ + k*FILE_BUFFER_ENTRY_SIZE, FILE_BUFFER_ENTRY_SIZE);
+            std::shared_ptr<LRUEntry> value;
+            value.reset(new LRUEntry(s_lpn, tmp_data[k]));
+            topfs_cache->Insert(s_lpn, value);
+            s_lpn += FILE_BUFFER_ENTRY_SIZE/SPDK_PAGE_SIZE;
+          }
+        }
+#endif*/
+/////////////////////////////////////////////////////////////////////////////
+        /*if (current_buf_index_ % 8 == 0)
+          SPDKWrite(sp_info_, file_buffer_[current_buf_index_]);
+        else
+          SPDKWrite(sp_info_, file_buffer_[current_buf_index_], file_buffer_[current_buf_index_ - 1]->queue_id_);
+        if (current_buf_index_ % 8 == 7)
+          CheckComplete(sp_info_, file_buffer_[current_buf_index_]->queue_id_);*/
+/////////////////////////////////////////////////////////////////////////////
+        SPDKWrite(sp_info_, file_buffer_[current_buf_index_]);
+        if (current_buf_index_ - last_sync_index_ - 1 >= 160) {
+          uint64_t count = 0;
+          while (!file_buffer_[last_sync_index_]->synced_) {
+            int queue_id = file_buffer_[last_sync_index_]->queue_id_;
+            CheckComplete(sp_info_, queue_id);
+            count++;
+            if (count > 1000000) {
+              count = 0;
+              usleep(100);
+            }
+          }
+/*#if SMART_CACHE
+          if (file_buffer_[last_sync_index_] != nullptr) {
+            file_buffer_[last_sync_index_]->mutex_.lock();
+            file_buffer_[last_sync_index_]->refs_--;
+            if (file_buffer_[last_sync_index_]->refs_ == 0) {
+              file_buffer_[last_sync_index_]->mutex_.unlock();
+              if (file_buffer_[last_sync_index_]->data_ != nullptr) {
+#if POS_IO
+                if (FILE_BUFFER_ENTRY_SIZE_ == FILE_BUFFER_ENTRY_SIZE) {
+                  //fprintf(stderr, "~SpdkFile something wrong 11!!\n");
+                  //spdk_mem_pool_->WriteInBuf(file_buffer_[last_sync_index_]->data_);
+                  file_buffer_[last_sync_index_]->buffer_cache_.reset(new LRUEntry(file_buffer_[last_sync_index_]->start_lpn_, file_buffer_[last_sync_index_]->data_));
+                  topfs_cache->Insert(file_buffer_[last_sync_index_]->start_lpn_, file_buffer_[last_sync_index_]->buffer_cache_);
+                } else {
+                  spdk_large_mem_pool_->WriteInBuf(file_buffer_[last_sync_index_]->data_);
+                }
+#else
+                spdk_mem_pool_->WriteInBuf(file_buffer_[last_sync_index_]->data_);
+#endif
+              }
+              delete file_buffer_[last_sync_index_];
+              file_buffer_[last_sync_index_] = nullptr;
+            } else {
+              file_buffer_[last_sync_index_]->deleted_ = true;
+              file_buffer_[last_sync_index_]->mutex_.unlock();
+            }
+          }
+#endif*/
+          last_sync_index_++;
+        }
+        current_buf_index_++;
+/*        if (current_buf_index_ - last_sync_index_ - 1 >= 4) {
+          Fsync(false);
+        }*/
+      }
+    }
+#ifdef PRINT_STAT
+    if (is_flush_) {
+      total_flush_written_.fetch_add(data.size());
+    } else {
+      total_compaction_written_.fetch_add(data.size());
+    }
+    if (spdk_start_time_.load() == 0) {
+      spdk_start_time_.store(SPDK_TIME);
+      last_print_compaction_time_.store(SPDK_TIME);
+      last_print_flush_time_.store(SPDK_TIME);
+    } else {
+      if (SPDK_TIME_DURATION(last_print_compaction_time_.load(), SPDK_TIME,
+                             spdk_tsc_rate_) > 1000000) {
+        print_mutex_.lock();
+        fprintf(stderr, "compaction: %s %.2lf\n", ssdlogging::GetDayTime().c_str(),
+               total_compaction_written_.load() * 1.0 / 1024 / 1024);
+        fprintf(stderr, "flush: %s %.2lf\n", ssdlogging::GetDayTime().c_str(),
+               total_flush_written_.load() * 1.0 / 1024 / 1024);
+        last_print_compaction_time_.store(SPDK_TIME);
+        print_mutex_.unlock();
+      }
+    }
+#endif
+    assert(left == 0);
+    metadata_->modified_time_ = Now();
+    metadata_->size_ += data.size();
+    //write_delay_.add(SPDK_TIME_DURATION(start, SPDK_TIME, spdk_tsc_rate_));
+    return IOStatus::OK();
+  }
+
+  IOStatus Fsync(bool write_last) {
+    int sync_last = current_buf_index_;
+    if (write_last && !file_buffer_[current_buf_index_]->Empty()) {
+      assert(!file_buffer_[current_buf_index_]->synced_);
+      if (file_buffer_[current_buf_index_]->queue_id_ == -1)
+/*#if POS_IO
+        if (is_sst_) {
+          if(spdk_mem_pool_->Length() < 100)
+            topfs_cache->Evict(100 - spdk_mem_pool_->Length());
+          char* tmp_data[LARGE_FILE_BUFFER_ENTRY_SIZE / FILE_BUFFER_ENTRY_SIZE];
+          uint64_t s_lpn = file_buffer_[current_buf_index_]->start_lpn_;
+          for (uint64_t k = 0; k < LARGE_FILE_BUFFER_ENTRY_SIZE / FILE_BUFFER_ENTRY_SIZE; k++) {
+            tmp_data[k] = spdk_mem_pool_->ReadValue();
+            memcpy(tmp_data[k], file_buffer_[current_buf_index_]->data_ + k*FILE_BUFFER_ENTRY_SIZE, FILE_BUFFER_ENTRY_SIZE);
+            std::shared_ptr<LRUEntry> value;
+            value.reset(new LRUEntry(s_lpn, tmp_data[k]));
+            topfs_cache->Insert(s_lpn, value);
+            s_lpn += FILE_BUFFER_ENTRY_SIZE/SPDK_PAGE_SIZE;
+          }
+        }
+#endif*/
+        SPDKWrite(sp_info_, file_buffer_[current_buf_index_]);
+    } else {
+      sync_last--;
+    }
+    for (int64_t i = last_sync_index_; i <= sync_last; i++) {
+      uint64_t count = 0;
+      while (!file_buffer_[i]->synced_) {
+        int queue_id = file_buffer_[i]->queue_id_;
+        CheckComplete(sp_info_, queue_id);
+        count++;
+        if (count > 1000000) {
+          count = 0;
+          usleep(100);
+        }
+      }
+    }
+    if (file_buffer_[current_buf_index_]->Full()) {
+      current_buf_index_++;
+      last_sync_index_ = sync_last+1;
+    } else if (file_buffer_[current_buf_index_]->Empty()) {
+      last_sync_index_ = sync_last+1;
+    } else {
+      last_sync_index_ = sync_last;
+      file_buffer_[current_buf_index_]->synced_ = false;
+      file_buffer_[current_buf_index_]->queue_id_ = -1;
+    }
+    return IOStatus::OK();
+  }
+  /*IOStatus Fsync(bool write_last) {
+    // return Status::OK();
+    // write [last_sync_index_ + 1, current_buf_index_ - 1]
+    int sync_start = last_sync_index_ + 1;
+    while (last_sync_index_ + 1 < current_buf_index_) {
+      last_sync_index_++;
+      assert(!file_buffer_[last_sync_index_]->synced_);
+      SPDKWrite(sp_info_, file_buffer_[last_sync_index_]);
+    }
+    // write last buffer
+    if (write_last && !file_buffer_[current_buf_index_]->Empty()) {
+      assert(!file_buffer_[current_buf_index_]->synced_);
+      SPDKWrite(sp_info_, file_buffer_[current_buf_index_]);
+      last_sync_index_++;
+    }
+    // wait for finish
+    for (int64_t i = sync_start; i <= last_sync_index_; i++) {
+      while (!file_buffer_[i]->synced_) {
+        int queue_id = file_buffer_[i]->queue_id_;
+        CheckComplete(sp_info_, queue_id);
+      }
+    }
+    return IOStatus::OK();
+  }*/
+
+  IOStatus Close() {
+    /*int sync_start = last_sync_index_ + 1;
+    while (last_sync_index_ < current_buf_index_) {
+      last_sync_index_++;
+      if(file_buffer_[last_sync_index_]->data_ != nullptr)
+        SPDKWrite(sp_info_, file_buffer_[last_sync_index_]);
+      else
+        last_sync_index_--;
+    }
+    for (int64_t i = sync_start; i <= last_sync_index_; i++) {
+      while (!file_buffer_[i]->synced_) {
+        int queue_id = file_buffer_[i]->queue_id_;
+        CheckComplete(sp_info_, queue_id);
+      }
+    }*/
+    WriteMeta(&file_meta_);
+    //fprintf(stderr, "Close fin %s %s\n", metadata_->fname_.c_str(), fname_.c_str());
+    return IOStatus::OK();
+  }
+
+  void Ref() {
+    refs_++;
+    assert(refs_ > 0);
+  }
+
+  void Unref() {
+    MutexLock lock(&fs_mutex_);
+    refs_--;
+    assert(refs_ >= 0);
+    if (refs_ == 0) {
+      spdk_file_system_.erase(fname_);
+      delete this;
+    }
+  }
+
+  uint64_t ModifiedTime() const { return metadata_->modified_time_; }
+
+  int64_t GetRef() { return refs_; }
+
+  std::string GetName() { return fname_; }
+
+  SPDKFileMeta *GetMetadata() { return metadata_; }
+
+  uint64_t get_ENTRY_SIZE() { return FILE_BUFFER_ENTRY_SIZE_;}
+ private:
+  uint64_t Now() {
+    int64_t unix_time = 0;
+    auto s = env_->GetCurrentTime(&unix_time);
+    assert(s.ok());
+    return static_cast<uint64_t>(unix_time);
+  }
+
+  Env *env_;
+  FileBuffer **file_buffer_;
+  const std::string fname_;
+  mutable port::Mutex mutex_;
+  bool locked_;
+  Random rnd_;
+  int64_t current_buf_index_;
+  int64_t last_sync_index_;
+  std::atomic<int64_t> refs_;
+  SPDKFileMeta *metadata_;
+  uint64_t file_buffer_num_;
+  bool is_flush_;
+  bool is_sst_;
+  std::atomic<int> allocated_buffer;
+  uint64_t pages_per_buffer_;
+  uint64_t start_lpn_;
+  uint64_t FILE_BUFFER_ENTRY_SIZE_;
+};
+
+class SpdkDirectory : public FSDirectory {
+ public:
+  //explicit PosixDirectory(int fd) : fd_(fd) {}
+  //~PosixDirectory();
+  IOStatus Fsync(const IOOptions& /*opts*/, IODebugContext* /*dbg*/) override {
+    return IOStatus::OK();
+  }
+};
+
+class SpdkSequentialFile : public FSSequentialFile {
+ public:
+  explicit SpdkSequentialFile(SpdkFile *file, const FileOptions& option) : file_(file), cur_offset_(0), use_direct_reads_(option.use_direct_reads) {
+    file_->Ref();
+    file_->GetMetadata()->SetReadable(true);
+  }
+
+  SpdkSequentialFile(const SpdkSequentialFile &) = delete;
+  void operator=(const SpdkSequentialFile &) = delete;
+
+  ~SpdkSequentialFile() override { file_->Unref(); }
+
+  IOStatus Read(size_t n, const IOOptions& /**/, Slice *result,
+              char *scratch, IODebugContext* /**/) override {
+    uint64_t fsize = file_->GetMetadata()->size_;
+    if(fsize < cur_offset_ + n){
+      n = fsize - cur_offset_;
+      //fprintf(stderr, "Read: %s, size:%lu\n", file_->GetName().c_str(), fsize);
+    }
+    //IOStatus s = file_->Read(cur_offset_, n, result, scratch, true, FSRandomAccessFile::kWillNeed);
+    IOStatus s;
+    if (use_direct_reads_)
+      s = file_->DIO_Read(cur_offset_, n, result, scratch);
+    else
+      s = file_->Read(cur_offset_, n, result, scratch, true);
+
+    if(s.ok())
+      cur_offset_ += n;
+    return s;
+  }
+
+  IOStatus PositionedRead(uint64_t /*offset*/, size_t /*n*/,
+                        const IOOptions& /*opts*/,
+                        Slice* /*result*/, char* /*scratch*/,
+                        IODebugContext* /*dbg*/) override {
+    fprintf(stderr, "PositionedRead!!!!!!!!!!!!!!! \n");
+    return IOStatus::OK();
+  }
+
+  IOStatus Skip(uint64_t /*n*/) override {
+    fprintf(stderr, "Skip!!!!!!!!!!!!!!! \n");
+    return IOStatus::OK();
+  }
+
+  IOStatus InvalidateCache(size_t /*offset*/, size_t /*length*/) override {
+    fprintf(stderr, "InvalidateCache!!!!!!!!!!!!!!! \n");
+    return IOStatus::OK();
+  }
+
+ private:
+  SpdkFile *file_;
+  uint64_t cur_offset_;
+  bool use_direct_reads_;
+};
+
+class SpdkRandomAccessFile : public FSRandomAccessFile {
+ public:
+  explicit SpdkRandomAccessFile(SpdkFile *file) : file_(file), pattern_(kNormal) {
+    file_->Ref();
+    file_->GetMetadata()->SetReadable(true);
+    //fprintf(stderr, "SpdkRandomAccessFile 111 %s\n", file_->GetName().c_str());
+  }
+
+  SpdkRandomAccessFile(const SpdkRandomAccessFile &copy)
+    : file_(copy.file_) {
+    file_->Ref();
+    fprintf(stderr, "\n\n***************************** copy SpdkRandomAccessFile 111 ****************************************\n\n");
+  }
+  void operator=(const SpdkRandomAccessFile &copy) {
+    file_ = copy.file_;
+    file_->Ref();
+    fprintf(stderr, "\n\n***************************** copy SpdkRandomAccessFile 222 ****************************************\n\n");
+  }
+
+  void Hint(AccessPattern pattern) {
+    pattern_ = pattern;
+    switch (pattern) {
+      case kNormal:
+        file_->OpenForCompaction();
+        //fprintf(stderr, "kNormal\n");
+        break;
+      case kRandom:
+        //fprintf(stderr, "kRandom\n");
+        break;
+      case kSequential:
+        fprintf(stderr, "kSequential\n");
+        break;
+      case kWillNeed:
+        fprintf(stderr, "kWillNeed\n");
+        break;
+      case kWontNeed:
+        fprintf(stderr, "kWontNeed\n");
+        break;
+      default:
+        fprintf(stderr, "default\n");
+        break;
+    }
+  }
+
+  ~SpdkRandomAccessFile() override { file_->Unref(); }
+
+#if OPTION_FOR_COMPACTION
+  IOStatus Read(uint64_t offset, size_t n, const IOOptions& opt, Slice *result,
+              char *scratch, IODebugContext* /**/) const override {
+#else
+  IOStatus Read(uint64_t offset, size_t n, const IOOptions&, Slice *result,
+              char *scratch, IODebugContext* /**/) const override {
+#endif
+    uint64_t fsize = file_->GetMetadata()->size_;
+    if(fsize < offset + n){
+      n = fsize - offset;
+    }
+#if SMART_CACHE
+#if OPTION_FOR_COMPACTION
+    return file_->Read(offset, n, result, scratch, opt.is_compaction);
+#else
+    if (pattern_ == kNormal || pattern_ == kWillNeed)
+      return file_->Read(offset, n, result, scratch, true);
+    else {
+      return file_->Read(offset, n, result, scratch);
+    }
+#endif
+#else
+    return file_->Read(offset, n, result, scratch);
+#endif
+  }
+
+//#if SMART_CACHE
+//  IOStatus Prefetch(uint64_t offset, size_t n, const IOOptions& /*opts*/, IODebugContext* /*dbg*/) {
+//    uint64_t fsize = file_->GetMetadata()->size_;
+//    if(fsize < offset + n){
+//      n = fsize - offset;
+//    }
+//    IOStatus s = file_->Prefetch(offset, n);
+//    return s;
+//  }
+//#endif
+
+ private:
+  SpdkFile *file_;
+  AccessPattern pattern_;
+};
+
+class SpdkWritableFile : public FSWritableFile {
+ public:
+  SpdkWritableFile(SpdkFile *file, RateLimiter *rate_limiter)
+      : file_(file), rate_limiter_(rate_limiter) {
+    //fprintf(stderr, "SpdkWritableFile 111 %s\n", file_->GetName().c_str());
+    file_->Ref();
+  }
+
+  ~SpdkWritableFile() override { file_->Unref(); }
+
+  IOStatus Append(const Slice &data, const IOOptions& /**/, IODebugContext* /**/) override {
+    size_t bytes_written = 0;
+    while (bytes_written < data.size()) {
+      auto bytes = RequestToken(data.size() - bytes_written);
+      IOStatus s = file_->Append(Slice(data.data() + bytes_written, bytes));
+      if (!s.ok()) {
+        fprintf(stderr, "%s error \n", __FUNCTION__);
+        return s;
+      }
+      bytes_written += bytes;
+    }
+    return IOStatus::OK();
+  }
+
+  IOStatus Append(const Slice &data, const IOOptions& /**/, const DataVerificationInfo& /**/, IODebugContext* /**/) override {
+    size_t bytes_written = 0;
+    while (bytes_written < data.size()) {
+      auto bytes = RequestToken(data.size() - bytes_written);
+      IOStatus s = file_->Append(Slice(data.data() + bytes_written, bytes));
+      if (!s.ok()) {
+        fprintf(stderr, "%s error \n", __FUNCTION__);
+        return s;
+      }
+      bytes_written += bytes;
+    }
+    return IOStatus::OK();
+  }
+
+
+  IOStatus Allocate(uint64_t /*offset*/, uint64_t /*len*/, const IOOptions& /**/, IODebugContext* /**/) override {
+    return IOStatus::OK();
+  }
+
+  IOStatus Truncate(uint64_t size, const IOOptions& /**/, IODebugContext* /**/) override {
+    file_->Truncate(static_cast<size_t>(size));
+    return IOStatus::OK();
+  }
+  IOStatus Close(const IOOptions& /**/, IODebugContext* /**/) override {
+    return file_->Close();
+  }
+
+  IOStatus Flush(const IOOptions& /**/, IODebugContext* /**/) override { return IOStatus::OK(); }
+
+  IOStatus Sync(const IOOptions& /**/, IODebugContext* /**/) override {
+    return file_->Fsync(true);
+    //IOStatus::OK();
+  }
+
+  uint64_t GetFileSize(const IOOptions& /**/, IODebugContext* /**/) override { return file_->Size(); }
+
+  bool IsSyncThreadSafe() const {
+    fprintf(stderr, "\n\nWARN!!!  IsSyncThreadSafe called!!! SPDK actually does not support IsSyncThreadSafe\n\n");
+    return true;
+  }
+
+ private:
+  inline size_t RequestToken(size_t bytes) {
+    if (rate_limiter_ && io_priority_ < Env::IO_TOTAL) {
+      bytes = std::min(
+          bytes, static_cast<size_t>(rate_limiter_->GetSingleBurstBytes()));
+      rate_limiter_->Request(bytes, io_priority_);
+    }
+    return bytes;
+  }
+
+  SpdkFile *file_;
+  RateLimiter *rate_limiter_;
+};
+
+__attribute__((unused)) static void TopFSResetStat(){
+#ifdef SPANDB_STAT
+  read_hit_ = read_miss_ = 0;
+  free_list_latency_.reset();
+  write_latency_.reset();
+  read_latency_.reset();
+  read_miss_latency_.reset();
+  read_hit_latency_.reset();
+  read_disk_latency_.reset();
+  memcpy_latency_.reset();
+  test_latency_.reset();
+#endif
+  topfs_cache->ResetStat();
+}
+
+static void Exit() {
+  // 1.free meta and filesystem
+  for (auto it = spdk_file_system_.begin(); it != spdk_file_system_.end();) {
+    auto next = ++it;
+    it--;
+    assert(it->second != nullptr);
+    it->second->Unref();
+    it = next;
+  }
+  // 2.write metadata and free meta buffer
+  if (meta_buffer_ != nullptr) {
+    WriteMeta(&file_meta_);
+    spdk_free(meta_buffer_);
+  }
+  // 3.delete metadata
+  for (auto &meta : file_meta_) {
+    assert(meta.second != nullptr);
+    delete meta.second;
+  }
+  // 4.free mem pool
+  if (topfs_cache != nullptr) {
+    delete topfs_cache;
+  }
+  if (spdk_mem_pool_ != nullptr) {
+    delete spdk_mem_pool_;
+  }
+  if (huge_pages_ != nullptr) {
+    delete huge_pages_;
+  }
+  // 5.free mutex
+  if (spdk_queue_mutexes_ != nullptr) {
+    for (int i = 0; i < total_queue_num_; i++) {
+      delete spdk_queue_mutexes_[i];
+    }
+    delete spdk_queue_mutexes_;
+  }
+  // 6. output
+  if (FILE_BUFFER_ENTRY_SIZE > (1ull << 20)) {
+    printf("FILE_BUFFER_ENTRY_SIZE: %.2lf MB\n",
+           FILE_BUFFER_ENTRY_SIZE / (1024 * 1024 * 1.0));
+  } else {
+    printf("FILE_BUFFER_ENTRY_SIZE: %.2lf KB\n",
+           FILE_BUFFER_ENTRY_SIZE / (1024 * 1.0));
+  }
+#ifdef SPANDB_STAT
+  printf("--------------L0 env---------------------\n");
+  printf("write latency: %ld %.2lf us\n", write_latency_.size(),
+         write_latency_.avg());
+  printf("read latency: %ld %.2lf us\n", read_latency_.size(),
+         read_latency_.avg());
+  printf("read miss latency: %ld %.2lf us\n", read_miss_latency_.size(),
+         read_miss_latency_.avg());
+  printf("read hit latency: %ld %.2lf us\n", read_hit_latency_.size(),
+         read_hit_latency_.avg());
+  printf("read from disk: %ld %.2lf us\n", read_disk_latency_.size(),
+         read_disk_latency_.avg());
+  if (read_hit_ + read_miss_ != 0) {
+    printf("read hit: %ld, read miss: %ld\n", read_hit_, read_miss_);
+    printf("read hit ratio: %lf\n",
+           (read_hit_ * 1.0) / (read_hit_ + read_miss_));
+  }
+  printf("free_list_latency: %ld %.2lf\n", free_list_latency_.size(),
+         free_list_latency_.avg());
+  printf("memcpy latency: %ld %.2lf\n", memcpy_latency_.size(),
+         memcpy_latency_.avg());
+  printf("test latency: %ld %.2lf\n", test_latency_.size(),
+         test_latency_.avg());
+  printf("------------------------------------------\n");
+#endif
+}
+
+__attribute__((unused)) static IOStatus check_overlap(uint64_t start_lpn,
+                                                    uint64_t end_lpn,
+                                                    std::string fn) {
+  MutexLock lock(&meta_mutex_);
+#if DEBUG_PRINT
+  fprintf(stderr, "!!! meta_mutex_ check_overlap\n");//lemma_print
+#endif
+  if (end_lpn < start_lpn) {
+    fprintf(stderr, "%s: end_lpn:%ld <= start_lpn:%ld\n", fn.c_str(), end_lpn,
+            start_lpn);
+    return IOStatus::IOError("SPDK can not new file\n");
+  }
+  bool overlap = false;
+  for (auto &m : file_meta_) {
+    if (end_lpn < m.second->start_lpn_ || start_lpn > m.second->end_lpn_) {
+      continue;
+    }
+    overlap = true;
+    fprintf(stderr, "file overlap\n");
+    fprintf(stderr, "new file: fname: %s, start: %ld, end: %ld\n", fn.c_str(),
+            start_lpn, end_lpn);
+    fprintf(stderr, "old file: %s\n", m.second->ToString().c_str());
+  }
+  if (overlap) {
+    uint64_t occupy_page = 0;
+    for (auto &m : file_meta_) {
+      occupy_page += (m.second->end_lpn_ - m.second->start_lpn_);
+    }
+    fprintf(stderr, "the occupied size is %.2lf GB\n",
+           occupy_page * SPDK_PAGE_SIZE * 1.0 / 1024 / 1024 / 1024);
+    fflush(stdout);
+    return IOStatus::IOError("SPDK can not new file because of overlap\n");
+  }
+  return IOStatus::OK();
+}
+
+__attribute__((unused)) static std::string NormalizeFilePath(const std::string path) {
+  std::string dst;
+  for (auto c : path) {
+    if (!dst.empty() && c == '/' && dst.back() == '/') {
+      continue;
+    }
+    dst.push_back(c);
+  }
+  return dst;
+}
+
+static void SpdkMigrationImpl(std::string dbpath, std::string data_path){
+  //bool ld_full = false;
+  uint64_t total_moved = 0;
+  uint64_t buffer_size = 1ull << 20;
+  char *buffer = (char *)spdk_zmalloc(buffer_size, SPDK_PAGE_SIZE, NULL,
+                                      SPDK_ENV_SOCKET_ID_ANY, SPDK_MALLOC_DMA);
+
+  DIR *dir;
+  struct dirent* entry;
+  struct stat file_stats;
+  if ((dir = opendir(data_path.c_str())) != nullptr) {
+    printf("start migration... %s\n", data_path.c_str());
+    while ((entry = readdir(dir)) != nullptr) {
+      std::string fname = entry->d_name;
+      if (fname[fname.size()-1] == 't' || fname[fname.size()-1] == 'g' || fname[fname.size()-1] == 'p' || fname[fname.size()-1] == 'P') {
+        //fprintf(stderr, "find file %s\n", fname.c_str());
+        std::string filename = NormalizeFilePath(dbpath + "/" + fname);
+        std::string data_filename = NormalizeFilePath(data_path + "/" + fname);
+        uint64_t file_size = 0;
+        if (!stat(data_filename.c_str(), &file_stats)) {
+          file_size = file_stats.st_size;
+          //printf(" is size %lu\n", file_size);
+        } else {
+          printf("stat() failed for this file\n");
+          continue;
+        }
+        int fd = open(data_filename.c_str(), O_RDONLY);
+        if (fd < 0) {
+          printf("open failed for this file\n");
+          continue;
+        }
+
+        uint64_t allocate_size = file_size / SPDK_PAGE_SIZE + 1;
+        uint64_t start_lpn = free_list.Get(allocate_size);
+        uint64_t end_lpn = start_lpn + allocate_size - 1;
+        uint64_t curr_lpn = start_lpn;
+        size_t size = 0;
+        while ((size = read(fd, buffer, buffer_size)) > 0) {
+          if (size % SPDK_PAGE_SIZE != 0) {
+            size = (size / SPDK_PAGE_SIZE + 1) * SPDK_PAGE_SIZE;
+          }
+          assert(curr_lpn + size / SPDK_PAGE_SIZE - 1 <= end_lpn);
+          SPDKWriteSync(sp_info_, buffer, curr_lpn, size);
+          curr_lpn += size / SPDK_PAGE_SIZE;
+        }
+        close(fd);
+        total_moved += file_size;
+        file_meta_[filename] = new SPDKFileMeta(filename, start_lpn, end_lpn, false, file_size);
+      } else if (fname[fname.size()-1] != '.') {
+        std::string data_filename = NormalizeFilePath(data_path + "/" + fname);
+        std::string filename = NormalizeFilePath(dbpath + "/" + fname);
+        //fprintf(stderr, "not: %s %s\n", filename.c_str(), data_filename.c_str());
+        int ret = system(("cp " + data_filename + " " + filename).c_str());
+        if(ret == 127 || ret == -1) {
+          printf("copy %s error!\n", filename.c_str());
+        }
+      }
+    }
+    closedir(dir);
+  } else {
+    fprintf(stderr, "open dir %s err! \n", dbpath.c_str());
+  }
+  spdk_free(buffer);
+  WriteMeta(&file_meta_);
+  if (total_moved / (1ull << 30) > 0) {
+    printf("Moved %.2lf GB\n", total_moved * 1.0 / (1ull << 30));
+  } else {
+    printf("Moved %.2lf MB\n", total_moved * 1.0 / (1ull << 20));
+  }
+  fflush(stdout);
+}
+
+}  // namespace rocksdb

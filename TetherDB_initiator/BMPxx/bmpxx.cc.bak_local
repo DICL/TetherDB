@@ -1,0 +1,108 @@
+#include "BMPxx/bmpxx.h"
+#include "rocksdb/db.h"
+#include "rocksdb/table.h"
+#include "rocksdb/options.h"
+#include "rocksdb/file_system.h"
+#include "rocksdb/utilities/options_util.h"
+#include "rocksdb/utilities/transaction_db.h"
+#include "rocksdb/iostats_context.h"
+#include "rocksdb/perf_context.h"
+#include "rocksdb/utilities/transaction.h"
+#include "rocksdb/merge_operator.h"
+#include "rocksdb/slice.h"
+#include "rocksdb/metadata.h"
+
+#include <iostream>
+#include <iterator>
+#include <fstream>
+#include <vector>
+#include <algorithm> // for std::copy
+#include <iomanip>
+#include <time.h>
+
+
+
+int main(int ac, char **av)
+{
+  rocksdb::Options options;
+  std::string dbpath("/lemma/rocksdb");
+  std::string data_path("/lemma/rocksdb2");
+  options.wal_dir = dbpath;
+  options.SetSpdkEnv("trtype:RDMA adrfam:IPv4 traddr:11.0.0.91 trsvcid:4521 subnqn:nqn.2019-04.pos:subsystem6");
+  options.spdk_fs->SpdkMigration(dbpath, data_path);
+  rocksdb::DB* db;
+  rocksdb::Status s = rocksdb::DB::Open(options, dbpath, &db);
+  if(!db) printf("db nullptr\n");
+
+  // Read first argument to string
+  if (ac < 6)
+  {
+    std::cerr << "Usage: " << av[0] << " [x1] [y1] [x2] [y2] [degree]" << std::endl;
+    return 1;
+  }
+
+  std::string input_filenames[] = {"/lemma/rocksdb/test1.bmp", "/lemma/rocksdb/test2.bmp", "/lemma/rocksdb/test3.bmp"};
+  std::string output_filenames[] = {"out1.bmp", "out2.bmp", "out3.bmp"};
+
+  struct timespec  begin, end;
+  clock_gettime(CLOCK_MONOTONIC, &begin);
+
+  int c = 0;
+  for(auto input_filename : input_filenames) {
+  std::string output_filename = output_filenames[c++];
+  std::vector<uint8_t> inputImage;
+  rocksdb::Slice buffer;
+  size_t kBlockSize = 1024*64;
+  char backing_store[kBlockSize];
+  std::unique_ptr<rocksdb::FSSequentialFile> f;
+  options.spdk_fs->NewSequentialFile(input_filename, rocksdb::FileOptions(), &f, nullptr);
+  rocksdb::Status status;
+  while(1) {
+    buffer.clear();
+    status = f->Read(kBlockSize, rocksdb::IOOptions(), &buffer, backing_store, nullptr);
+    if (status.ok())
+      for(size_t i = 0; i < buffer.size(); i++)
+        inputImage.push_back((uint8_t)backing_store[i]);
+    if (!status.ok() || buffer.size() < static_cast<size_t>(kBlockSize)) break;
+  }
+
+
+  //decode input
+  auto decoded_input = bmpxx::bmp::decode(inputImage);
+  std::vector<uint8_t> decodedImage = decoded_input.first;
+  bmpxx::BmpDesc input_description = decoded_input.second;
+  // Print description
+  std::cout << "Successfully decoded " << input_filename << std::endl;
+  std::cout << "Width: " << input_description.width << std::endl;
+  std::cout << "Height: " << input_description.height << std::endl;
+  std::cout << "Channels: " << (int)input_description.channels << std::endl;
+
+  //crop
+  auto crop_result = bmpxx::bmp::crop(decodedImage, input_description, std::stoi(av[1]), std::stoi(av[2]), std::stoi(av[3]), std::stoi(av[4]));
+  std::vector<uint8_t> cropImage = crop_result.first;
+  bmpxx::BmpDesc crop_description = crop_result.second;
+
+  auto rotImage = bmpxx::bmp::rotate(cropImage, crop_description, std::stoi(av[5]));
+
+  //encode output
+  std::vector<uint8_t> outputImage = bmpxx::bmp::encode(rotImage, crop_description);
+  std::cout << "Successfully encoded to " << output_filename << std::endl;
+
+
+  //save output
+  std::ofstream outfile(output_filename, std::ios::binary);
+  outfile.write(reinterpret_cast<char *>(outputImage.data()), outputImage.size());
+  outfile.close();
+  }
+  clock_gettime(CLOCK_MONOTONIC, &end);
+  std::cout << (end.tv_sec - begin.tv_sec) + (end.tv_nsec - begin.tv_nsec) / 1000000000.0 << std::endl;
+  return 0;
+}
+  uint64_t start_lpn;
+  uint64_t end_lpn;
+  options.spdk_fs->GetFileAddr(input_filename, &start_lpn, &end_lpn);
+  uint64_t size;
+  options.spdk_fs->GetFileSize(input_filename, rocksdb::IOOptions(), &size, nullptr);
+  compaction_data::PreprocessRequest request1;
+  options.greeter->Preprocess(input_filename, start_lpn, end_lpn, size, std::stoi(av[3]), std::stoi(av[4]), std::stoi(av[5]), std::stoi(av[6]), std::stoi(av[7]));
+

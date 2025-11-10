@@ -1,0 +1,270 @@
+#pragma once
+
+#include "env/topfs_cache.h"
+#include <unordered_map>
+#include "lemma/util.h"
+
+namespace rocksdb {
+
+template <class TKey, class TValue>
+class SegMRUCache: public TopFSCache<TKey, TValue> {
+	struct ListNode {
+	    ListNode() : prev(nullptr), next(nullptr), valid(true), low_pri(false), prev_low(nullptr), next_low(nullptr) {}
+
+	    ListNode(const TKey& k, const TValue& v, bool _low_pri)
+	        : key(k), value(v),
+	          prev(nullptr), next(nullptr), valid(true), low_pri(_low_pri), prev_low(nullptr), next_low(nullptr) {}
+	    
+	    bool Valid(){return valid;}
+
+	    TKey key;
+	    TValue value;
+	    ListNode* prev;
+	    ListNode* next;
+	    bool valid;
+	    bool low_pri;
+	    ListNode* prev_low;
+	    ListNode* next_low;
+	    
+	};
+
+	class MRUCache{
+	private:
+		uint64_t capacity;
+		uint64_t size;
+		ListNode *tail;
+		ListNode *low_tail;
+		std::unordered_map<TKey, ListNode*> hash_map;
+
+		// typedef std::mutex MRUMutex;
+		typedef TopFSSpinLock MRUMutex;
+		MRUMutex mutex_;
+
+		//ssdlogging::statistics::AvgStat find_lat;
+
+		void DeleteNode(ListNode *node){
+			if(node->prev != NULL)
+				node->prev->next = node->next;
+			if(node->next != NULL)
+				node->next->prev = node->prev;
+			else
+				tail = node->prev;
+			node->prev = node->next = NULL;
+
+			if(node->low_pri) {
+				if(node->prev_low != NULL)
+					node->prev_low->next_low = node->next_low;
+				if(node->next_low != NULL)
+					node->next_low->prev_low = node->prev_low;
+				else
+					low_tail = node->prev_low;
+				node->prev_low = node->next_low = NULL;
+			}
+
+			size--;
+		}
+
+		void PushToBack(ListNode *node){
+			ListNode *tmp = tail;
+			node->next = NULL;
+			node->prev = tmp;
+			tail = node;
+			if(tmp != NULL)
+				tmp->next = node;
+			if(node->low_pri){
+				ListNode *tmp2 = low_tail;
+				node->next_low = NULL;
+				node->prev_low = tmp2;
+				low_tail = node;
+				if(tmp2 != NULL)
+					tmp2->next_low = node;
+			}
+			size++;
+		}
+
+		void InternalEvict(){
+			ListNode* node;
+			if (low_tail != nullptr)
+				node = low_tail;
+			else {
+				node = tail;
+                        }
+			if (node == nullptr) {
+				fprintf(stderr, "no cache err!!! \n");
+				return;
+			}
+			TKey key = node->key;
+			DeleteNode(node);
+			hash_map.erase(key);
+			delete node;
+		}
+
+	public:
+		MRUCache(uint64_t max_size):
+			capacity(max_size),
+			size(0),
+			tail(nullptr),
+			low_tail(nullptr) {}
+		
+		~MRUCache(){
+			Clear();
+		}
+
+		void Evict(){
+			std::unique_lock<MRUMutex> lock(mutex_);
+			InternalEvict();
+/*			ListNode* node = tail;
+			if (node == nullptr) {
+				fprintf(stderr, "no cache err!!! \n");
+				return;
+			}
+			TKey key = node->key;
+			DeleteNode(node);
+			hash_map.erase(key);
+			delete node;*/
+		}
+
+		bool Find(const TKey& key, TValue& value){
+			std::unique_lock<MRUMutex> lock(mutex_);
+			//auto start = SSDLOGGING_TIME_NOW;
+			auto it = hash_map.find(key);
+			if(it == hash_map.end())
+				return false;
+			if(!it->second->Valid())
+				return false;
+			ListNode* node = it->second;
+			value =  node->value;
+			DeleteNode(node);
+			hash_map.erase(key);
+			delete node;
+			//find_lat.add(SSDLOGGING_TIME_DURATION(start, SSDLOGGING_TIME_NOW));
+			return true;
+		}
+
+		bool Insert(const TKey& key, const TValue& value, bool low_pri){
+			std::unique_lock<MRUMutex> lock(mutex_);
+			//if(size + 1 >= capacity)
+			auto it = hash_map.find(key);
+			if(it != hash_map.end()){
+				ListNode* node = it->second;
+				if(node->Valid())
+					return false;
+				node->value = value;
+				return true;
+			}
+			if(size + 1 >= capacity && (low_pri || low_tail == nullptr))
+				return true;
+			ListNode* node = new ListNode(key, value, low_pri);
+			hash_map[key] = node;
+			PushToBack(node);
+			if(size >= capacity)
+				InternalEvict();
+			return true;
+		}
+
+		void DeleteKey(const TKey& key){
+			std::unique_lock<MRUMutex> lock(mutex_);
+			auto it = hash_map.find(key);
+			if(it == hash_map.end())
+				return ;
+			ListNode* node = it->second;
+			DeleteNode(node);
+			hash_map.erase(node->key);
+			delete node;
+		}
+
+		void Clear(){
+			//printf("find_lat: %ld %.2lf us\n", find_lat.size(), find_lat.avg());
+			std::unique_lock<MRUMutex> lock(mutex_);
+			while(tail != nullptr){
+				InternalEvict();
+			}
+		}
+	};
+
+private:
+	const int SEG_NUM = 40;
+	uint64_t capacity;
+	MRUCache **cache_list = nullptr;
+
+	int GetMRUIndex(TKey key){
+		return key % SEG_NUM;
+	}
+
+	ssdlogging::statistics::AvgStat insert_lat;
+	ssdlogging::statistics::AvgStat find_lat;
+	ssdlogging::statistics::AvgStat delete_lat;
+	ssdlogging::statistics::AvgStat evict_lat;
+	ssdlogging::statistics::AvgStat test_lat;
+
+public:
+	SegMRUCache(uint64_t max_size):capacity(max_size){
+		printf("Own MRU Cache: %d\n", SEG_NUM);
+		cache_list = new MRUCache* [SEG_NUM];
+		for(int i=0; i<SEG_NUM; i++){
+			cache_list[i] = new MRUCache(max_size / SEG_NUM);
+		}
+	}
+
+	bool Insert(const TKey& key, const TValue& value, bool low_pri){
+		auto start = SSDLOGGING_TIME_NOW;
+		int index = GetMRUIndex(key);
+		bool res =  cache_list[index]->Insert(key, value, low_pri);
+		insert_lat.add(SSDLOGGING_TIME_DURATION(start, SSDLOGGING_TIME_NOW));
+		return res;
+	}
+
+	bool Find(const TKey& key, TValue& value){
+		auto start = SSDLOGGING_TIME_NOW;
+		int index = GetMRUIndex(key);
+		bool res = cache_list[index]->Find(key, value);
+		find_lat.add(SSDLOGGING_TIME_DURATION(start, SSDLOGGING_TIME_NOW));
+		return res;
+	}
+
+	void Evict(){
+		auto start = SSDLOGGING_TIME_NOW;
+		int index = ssdlogging::random::Random::GetTLSInstance()->Next() % SEG_NUM;
+		cache_list[index]->Evict();
+		evict_lat.add(SSDLOGGING_TIME_DURATION(start, SSDLOGGING_TIME_NOW));
+	}
+
+	void Evict(int num){
+		//fprintf(stderr, "\nEvict by buffer %d\n\n", num);
+		for(int i = 0; i<num; i++){
+			int index = ssdlogging::random::Random::GetTLSInstance()->Next() % SEG_NUM;
+			cache_list[index]->Evict();
+		}
+	}
+
+	void DeleteKey(const TKey& key){
+		auto start = SSDLOGGING_TIME_NOW;
+		int index = GetMRUIndex(key);
+		cache_list[index]->DeleteKey(key);
+		delete_lat.add(SSDLOGGING_TIME_DURATION(start, SSDLOGGING_TIME_NOW));
+	}
+
+	void ResetStat(){
+		insert_lat.reset();
+		find_lat.reset();
+		delete_lat.reset();
+		evict_lat.reset();
+		test_lat.reset();
+	}
+
+	virtual ~SegMRUCache(){
+		printf("------------Seg MRU Cache---------------\n");
+		printf("delete_lat: %ld %.2lf us\n", delete_lat.size(), delete_lat.avg());
+		printf("insert_lat: %ld %.2lf us\n", insert_lat.size(), insert_lat.avg());
+		printf("find_lat: %ld %.2lf us\n", find_lat.size(), find_lat.avg());
+		printf("evict_lat: %ld %.2lf us\n", evict_lat.size(), evict_lat.avg());
+		for(int i=0; i<SEG_NUM; i++){
+			delete cache_list[i];
+		}
+		delete cache_list;
+		printf("---------------------------------------\n");
+	};
+};
+
+
+}

@@ -1,0 +1,104 @@
+HISTORY.md:922:* Introduce level-based L0->L0 compactions to reduce file count, so write delays are incurred less often.
+db/compact_files_test.cc:348:    // L0->L1 compaction, so output should be ZSTD-compressed
+db/compaction/compaction_picker_test.cc:1241:  // but L0->L1 compaction is blocked by a file in L1 being compacted.
+db/compaction/compaction_picker_test.cc:1272:  // If no file in L1 being compacted, L0->L1 compaction will be scheduled.
+db/compaction/compaction_picker_test.cc:1770:  // L0->L1 compaction.
+db/compaction/compaction_picker_test.cc:1801:  // is marked as being compacted to avoid L0->L1 compaction.
+db/compaction/compaction_picker_test.cc:1832:  // compacted to avoid L0->L1 compaction.
+db/compaction/compaction_picker_level.cc:87:  // For L0->L0, picks the longest span of files that aren't currently
+db/compaction/compaction_picker_level.cc:92:  // performed even when L0->base_level compactions are blocked.
+db/compaction/compaction_picker_level.cc:176:        // If L0->base_level compaction is pending, don't schedule further
+db/compaction/compaction_picker_level.cc:177:        // compaction from base level. Otherwise L0->base_level compaction
+db/compaction/compaction_picker_level.cc:198:          // L0->base_level may be blocked due to ongoing L0->base_level
+db/compaction/compaction_picker_level.cc:210:          }//lemmalemma. disable L0->L0 compaction
+db/compaction/compaction_picker_level.cc:512:    // resort to L0->L0 compaction yet.
+db/db_dynamic_level_test.cc:215:  // Fill up L0, and then run an (auto) L0->Lmax compaction to raise the base
+db/db_compaction_test.cc:1981:  // Then L0->L1 compaction happens, which outputs keys as follows:
+db/db_compaction_test.cc:2933:    // this should execute L0->L1
+db/db_compaction_test.cc:2968:    // this should execute both L0->L1 and L1->L2 (merge with previous file)
+db/db_compaction_test.cc:3119:// running parallel L0-L1 compactions
+db/db_compaction_test.cc:3304:  // The L0->L1 must be picked before we begin flushing files to trigger
+db/db_compaction_test.cc:3318:  // Files 0-4 will be included in an L0->L1 compaction.
+db/db_compaction_test.cc:3320:  // L0->L0 will be triggered since the sync points guarantee compaction to base
+db/db_compaction_test.cc:3342:  // L0 has the 2MB file (not compacted) and 4MB file (output of L0->L0)
+db/db_compaction_test.cc:3361:  // regression test for issue #2722: L0->L0 compaction can resurrect deleted
+db/db_compaction_test.cc:3374:  // The L0->L1 must be picked before we begin flushing files to trigger
+db/db_compaction_test.cc:3389:  // Files 0-4 will be included in an L0->L1 compaction.
+db/db_compaction_test.cc:3391:  // L0->L0 will be triggered since the sync points guarantee compaction to base
+db/db_compaction_test.cc:3393:  // 5-9 are included in the L0->L0 due to work-per-deleted file decreasing.
+db/db_compaction_test.cc:3396:  // L0->L0 preserves the deletion such that the key remains deleted.
+db/db_compaction_test.cc:3399:    // verify is not resurrected by L0->L0 compaction.
+db/db_compaction_test.cc:3420:  // L0 has a single output file from L0->L0
+db/db_compaction_test.cc:3533:  // Files 0-3 will be included in an L0->L1 compaction.
+db/db_compaction_test.cc:5349:  // The L0->L1 must be picked before we begin ingesting files to trigger
+db/db_compaction_test.cc:5435:  // The L0->L1 must be picked before we begin ingesting files to trigger
+db/db_compaction_test.cc:5667:      // between the background compaction's L0->L1 and its L1->L2.
+db/db_compaction_test.cc:5743:  // foreground thread will try to simultaneously compact L0->L1.
+db/db_compaction_test.cc:5746:      // between the background compaction's L0->L1 and its L1->L2.
+db/db_compaction_test.cc:5759:      // foreground's `CompactRange()` is guaranteed to attempt an L0->L1
+db/db_impl/db_impl_compaction_flush.cc:3198:          fprintf(stderr, "%lu ", l0->fd.GetNumber());
+db/db_impl/db_impl_compaction_flush.cc:3200:          l0->compaction_finished = true;
+db/db_impl/db_impl_compaction_flush.cc:3202:          l0->log_sst->mem()->SetLogTrue();
+db/db_impl/db_impl_compaction_flush.cc:3205:          mem_list->current()->Remove(l0->log_sst->mem(), &job_context->memtables_to_free);
+db/db_sst_test.cc:172:  // this should execute both L0->L1 and L1->(move)->L2 compactions
+db/db_sst_test.cc:220:  // this should execute both L0->L1 and L1->(move)->L2 compactions
+db/db_range_del_test.cc:1204:  // Push dummy data to L3 so that our actual test files on L0-L2
+db/db_range_del_test.cc:1356:  // Release snapshots so seqnums can be zeroed when L0->L1 happens.
+db/db_range_del_test.cc:1547:  // setting of `max_compaction_bytes` will cause the L0->L1 to output multiple
+db/db_range_del_test.cc:1561:  // Ensure manual L0->L1 compaction cuts the outputs before the range tombstone
+db/db_test2.cc:1497:  // This L0->L1 compaction merges the two L0 files into L1. The produced L1
+db/forward_iterator.cc:685:            l0->smallest.user_key(), *read_options_.iterate_upper_bound) > 0) {
+db/memtable_list.cc:410:    if (l0->log_sst != nullptr) {
+db/memtable_list.cc:412:      l0->log_sst->mem()->SetLogTrue();
+db/memtable_list.cc:414:      fprintf(stderr, "L0 compaction result %lu\n", l0->log_sst->LogNumber());
+db/memtable_list.cc:417:      to_delete.push_back(l0->log_sst->mem());
+db/version_set.cc:2726:          // Level-based involves L0->L0 compactions that can lead to oversized
+db/version_set.cc:3633:        //   2. number of L0 files reaches twice the L0->L1 compaction trigger
+db/version_set.cc:5833:      // We are doing a L0->base_level compaction. The assumption is if
+db_stress_tool/db_stress_gflags.cc:312:              "Maximum number of subcompactions to divide L0-L1 compactions "
+docs/_posts/2017-05-26-rocksdb-5-4-5-released.markdown:18:* Introduce level-based L0->L0 compactions to reduce file count, so write delays are incurred less often.
+docs/_posts/2017-06-26-17-level-based-changes.markdown:14:Also, due to how L0 files can span the entire key-range, compaction parallelization is limited. Files at L0 or L1 may be locked due to involvement in pending L0->L1 or L1->L2 compactions. We can only schedule a parallel L0->L1 compaction if it does not require any of the locked files, which is typically not the case.
+docs/_posts/2017-06-26-17-level-based-changes.markdown:16:To handle these constraints better, we added a new type of compaction, L0->L0. It quickly reduces file count in L0 and can be scheduled even when L1 files are locked, unlike L0->L1. We also changed the L0->L1 picking algorithm to increase opportunities for parallelism.
+docs/_posts/2017-06-26-17-level-based-changes.markdown:18:### Old L0->L1 Picking Logic
+docs/_posts/2017-06-26-17-level-based-changes.markdown:20:Previously, our logic for picking which L0 file to compact was the same as every other level: pick the largest file in the level. One special property of L0->L1 compaction is that files can overlap in the input level, so those overlapping files must be pulled in as well. For example, a compaction may look like this:
+docs/_posts/2017-06-26-17-level-based-changes.markdown:26:Users may insert their data less uniformly in the key-range. For example, a database may look like this during L0->L1 compaction:
+docs/_posts/2017-06-26-17-level-based-changes.markdown:32:We can now see the high-level problems with this approach more clearly. First, locked files in L0 or L1 prevent us from parallelizing compactions. When locked files block L0->L1 compaction, there is nothing we can do to eliminate L0 files. Second, L0->L1 compactions are relatively slow. As we saw, when keys are uniformly distributed, L0->L1 compacts two entire levels. While this is happening, new files are being flushed to L0, advancing towards the file count limit.
+docs/_posts/2017-06-26-17-level-based-changes.markdown:34:### New L0->L0 Algorithm
+docs/_posts/2017-06-26-17-level-based-changes.markdown:36:We introduced compaction within L0 to improve both parallelization and speed of reducing L0 file count. An L0->L0 compaction may look like this:
+docs/_posts/2017-06-26-17-level-based-changes.markdown:40:Say the L1->L2 compaction started first. Now L0->L1 is prevented by the locked L1 file. In this case, we compact files within L0. This allows us to start the work for eliminating L0 files earlier. It also lets us do less work since we don't pull in any L1 files, whereas L0->L1 compaction would've pulled in all of them. This lets us quickly reduce L0 file count to keep read-amp low while sustaining large bursts of writes (i.e., fast accumulation of L0 files).
+docs/_posts/2017-06-26-17-level-based-changes.markdown:46:### New L0->L1 Picking Logic
+docs/_posts/2017-06-26-17-level-based-changes.markdown:48:Recall how the old L0->L1 picking algorithm chose the largest L0 file for compaction. This didn't fit well with L0->L0 compaction, which operates on a span of files. That span begins at the newest L0 file, and expands towards older files as long as they're not being compacted. Since the largest file may be anywhere, the old L0->L1 picking logic could arbitrarily prevent us from getting a long span of files. See the second illustration in this post for a scenario where this would happen.
+docs/_posts/2017-06-26-17-level-based-changes.markdown:50:So, we changed the L0->L1 picking algorithm to start from the oldest file and expand towards newer files as long as they're not being compacted. For example:
+docs/_posts/2017-06-26-17-level-based-changes.markdown:52:![l0-l1-contend.png](/static/images/compaction/l0-l1-contend.png)
+docs/_posts/2017-06-26-17-level-based-changes.markdown:54:Now, there can never be L0 files unreachable for L0->L0 due to L0->L1 selecting files in the middle. When longer spans of files are available for L0->L0, we perform less compaction work per deleted L0 file, thus improving efficiency.
+docs/_posts/2017-06-26-17-level-based-changes.markdown:60:Mark Callaghan did the most extensive benchmarking of this feature's impact on MyRocks. See his results [here](http://smalldatum.blogspot.com/2017/05/innodb-myrocks-and-tokudb-on-insert.html). Note the primary change between his March 17 and April 14 builds is the latter performs L0->L0 compaction.
+options/options.cc:608:  // start flushing L0->L1 as soon as possible. each file on level0 is
+options/options.cc:614:  // make Level1 size equal to Level0 size, so that L0->L1 compactions are fast
+tools/advisor/advisor/rules.ini:38:suggestions=inc-max-subcompactions:inc-max-bg-compactions:inc-write-buffer-size:dec-max-bytes-for-level-base:inc-l0-slowdown-writes-trigger
+tools/advisor/advisor/rules.ini:46:suggestions=inc-max-bg-compactions:inc-write-buffer-size:inc-l0-stop-writes-trigger
+tools/advisor/advisor/rules.ini:87:[Suggestion "inc-l0-slowdown-writes-trigger"]
+tools/advisor/advisor/rules.ini:91:[Suggestion "inc-l0-stop-writes-trigger"]
+tools/advisor/advisor/rules.ini:103:[Rule "level0-level1-ratio"]
+tools/advisor/advisor/rules.ini:104:conditions=level0-level1-ratio
+tools/advisor/advisor/rules.ini:107:[Condition "level0-level1-ratio"]
+tools/advisor/advisor/rules.ini:183:[Rule "small-l0-files"]
+tools/advisor/advisor/rules.ini:184:conditions=small-l0-files
+tools/advisor/advisor/rules.ini:187:[Condition "small-l0-files"]
+tools/advisor/test/input_files/triggered_rules.ini:10:suggestions=inc-max-subcompactions:inc-max-bg-compactions:inc-write-buffer-size:dec-max-bytes-for-level-base:inc-l0-slowdown-writes-trigger
+tools/advisor/test/input_files/triggered_rules.ini:18:suggestions=inc-max-bg-compactions:inc-write-buffer-size:inc-l0-stop-writes-trigger
+tools/advisor/test/input_files/triggered_rules.ini:57:[Suggestion "inc-l0-slowdown-writes-trigger"]
+tools/advisor/test/input_files/triggered_rules.ini:61:[Suggestion "inc-l0-stop-writes-trigger"]
+tools/advisor/test/input_files/triggered_rules.ini:73:[Rule "level0-level1-ratio"]
+tools/advisor/test/input_files/triggered_rules.ini:74:conditions=level0-level1-ratio
+tools/advisor/test/input_files/triggered_rules.ini:75:suggestions=l0-l1-ratio-health-check
+tools/advisor/test/input_files/triggered_rules.ini:77:[Condition "level0-level1-ratio"]
+tools/advisor/test/input_files/triggered_rules.ini:82:[Suggestion "l0-l1-ratio-health-check"]
+tools/advisor/test/input_files/test_rules.ini:14:suggestions=l0-l1-ratio-health-check
+tools/advisor/test/input_files/test_rules.ini:46:[Suggestion "l0-l1-ratio-health-check"]
+tools/advisor/test/input_files/rules_err1.ini:39:suggestions=inc-max-bg-compactions:missing-action:inc-l0-stop-writes-trigger
+tools/advisor/test/input_files/rules_err1.ini:54:[Suggestion "inc-l0-stop-writes-trigger"]
+tools/advisor/test/test_rule_parser.py:22:        'inc-l0-slowdown-writes-trigger'
+tools/advisor/test/test_rule_parser.py:27:        'inc-l0-stop-writes-trigger'
+tools/advisor/test/test_rule_parser.py:35:    "level0-level1-ratio": [
+tools/advisor/test/test_rule_parser.py:36:        'l0-l1-ratio-health-check'
+tools/db_bench_tool.cc:406:              "Maximum number of subcompactions to divide L0-L1 compactions "

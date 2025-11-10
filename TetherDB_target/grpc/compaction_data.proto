@@ -1,0 +1,203 @@
+// Copyright 2015 gRPC authors.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "io.grpc.examples.compaction_data";
+option java_outer_classname = "CompactionDataProto";
+option objc_class_prefix = "CDP";
+
+package compaction_data;
+
+// The greeting service definition.
+service Greeter {
+  // Sends a greeting
+  rpc SayHello (CompactionRequest) returns (CompactionReply) {}
+  rpc Caching (CacheRequest) returns (CacheReply) {}
+  rpc LocalCompactionResult(LocalCompactionRequest) returns (LocalCompactionReply) {}
+  rpc PingTest (PingTestRequest) returns (PingTestReply) {}
+  rpc Token (TokenRequest) returns (TokenReply) {}
+
+  rpc Preprocess (PreprocessRequest) returns (PreprocessReply) {}
+}
+
+// The request message containing the user's name.
+message CompactionRequest {
+
+  message CompressionOptions{
+    int32 window_bits = 1;
+    int32 level = 2;
+    int32 strategy = 3;
+    uint32 max_dict_bytes = 4;
+    uint32 zstd_max_train_bytes = 5;
+    uint32 parallel_threads = 6;
+    bool enabled = 7;
+  }
+
+  message FileMetaData {
+    optional bytes smallest = 1;
+    optional bytes largest = 2;
+    optional uint64 file_size = 3;
+    optional uint64 num_entries = 4;
+    optional uint64 packed_number_and_path_id = 5;
+    optional uint64 largest_seqno = 6;
+    optional uint64 start_lpn = 7; //spdk
+    optional uint64 end_lpn = 8; //spdk
+    repeated uint64 indexs = 9;
+  }
+
+  message CompactionInputFiles {
+    int32 level = 1;
+    repeated FileMetaData files = 2;
+    repeated FileMetaData atomic_compaction_unit_boundaries = 3; 
+  }
+
+/*  message VFileMetaData {
+    repeated FileMetaData level_files = 1;
+  }
+*/
+  uint64 min_input_file_oldest_ancester_time_ = 1;
+  //repeated VFileMetaData input_vstorage_levelfiles_ = 2;
+  //int32 start_level_ = 3;
+  int32 output_level_ = 2;
+  uint64 max_output_file_size_ = 3;
+  //uint64 max_compaction_bytes_ = 6;///////////////////////////////////////
+  uint32 max_subcompactions_ = 4;
+  //Version* input_version_;
+  int32 number_levels_ = 5;
+  //ColumnFamilyData* cfd_;
+  uint32 output_path_id_ = 6;
+  int32 output_compression_ = 7;
+  CompressionOptions output_compression_opts_ = 8;
+  //bool deletion_compaction_ = 12;
+  repeated CompactionInputFiles inputs_ = 9;
+  repeated FileMetaData grandparents_ = 10;
+  double score_ = 11;
+  bool bottommost_level_ = 12;
+  bool is_full_compaction_ = 13;
+  bool is_manual_compaction_ = 14;
+  bytes smallest_user_key_ = 15;
+  bytes largest_user_key_ = 16;
+  int32 compaction_reason_ = 17;
+
+  int32 job_id = 18;
+  bool shutting_down = 19;
+  int64 preserve_deletes_seqnum = 20;
+  int64 earliest_write_conflict_snapshot = 21;
+  //bool paranoid_file_checks = 26;
+  //bool measure_io_stats = 27;
+  int32 thread_pri = 22;
+  bool is_manual = 23;
+  optional int32 manual_compaction_paused = 24;
+  string db_id = 25;
+  string db_session_id = 26;
+  string full_history_ts_low = 27;
+  //int32 write_hint = 34;
+  int64 result_file_count = 28;
+  int64 result_file_number = 29;
+  int32 base_level = 30;
+  repeated uint64 start_lpns = 31; //spdk
+  repeated bytes boundaries = 32;
+  repeated uint64 boundaries_len = 33;
+  int32 total_len = 34;
+  int32 base_index = 35;
+}
+
+// The response message containing the greetings
+message CompactionReply {
+  message Slice {
+    bytes data = 1;
+    uint64 seq = 2;
+    int32 v_type = 3;
+  }
+
+  message FileMetaData {
+    Slice smallest = 1;
+    Slice largest = 2;
+    uint64 file_size = 3;
+    uint64 packed_number_and_path_id = 4;
+    uint64 largest_seqno = 5;
+    uint64 smallest_seqno = 6;
+    uint64 oldest_ancester_time = 7;
+    uint64 file_creation_time = 8;
+    optional uint64 start_lpn = 9; //spdk
+  }
+
+  repeated FileMetaData meta = 1;
+  int64 result_file_count = 2;
+}
+
+message CacheRequest {
+  bytes smallest = 1;
+  bytes largest = 2;
+  uint64 file_size = 3;
+  uint64 num_entries = 4;
+  uint64 packed_number_and_path_id = 5;
+  uint64 largest_seqno = 6;
+  uint64 smallest_seqno = 7;
+  optional uint64 start_lpn = 8;
+  optional uint64 end_lpn = 9;
+  repeated uint64 offset = 10;
+  repeated uint64 footer = 11;
+}
+
+message CacheReply {
+}
+
+message LocalCompactionRequest {
+  repeated bytes smallest = 1;
+  repeated bytes largest = 2;
+  repeated uint64 file_size = 3;
+  repeated uint64 num_entries = 4;
+  repeated uint64 packed_number_and_path_id = 5;
+  repeated uint64 largest_seqno = 6;
+  repeated uint64 smallest_seqno = 7;
+  repeated uint64 start_lpn = 8;
+  repeated uint64 end_lpn = 9;
+  repeated uint64 deleted = 10;
+  repeated bool deleted_level = 11;
+  int32 level = 12;
+}
+
+message LocalCompactionReply {
+}
+
+message PingTestRequest {}
+message PingTestReply {}
+
+message TokenRequest {
+  bool get = 1;
+}
+message TokenReply {}
+
+message PreprocessRequest {
+  message Req {
+    string fname = 1;
+    uint64 start_lpn = 2;
+    uint64 end_lpn = 3;
+    uint64 size = 4;
+    //int32 x1 = 5;
+    //int32 y1 = 6;
+    //int32 x2 = 7;
+    //int32 y2 = 8;
+    //int32 degree = 9;
+  }
+  repeated Req req = 1;
+}
+
+message PreprocessReply {
+  repeated bytes bmps = 1;
+  optional uint64 sec= 2;
+  optional uint64 usec = 3;
+}

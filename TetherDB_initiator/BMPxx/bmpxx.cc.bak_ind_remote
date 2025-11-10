@@ -1,0 +1,177 @@
+#include "BMPxx/bmpxx.h"
+#include "rocksdb/db.h"
+#include "rocksdb/table.h"
+#include "rocksdb/options.h"
+#include "rocksdb/file_system.h"
+#include "rocksdb/utilities/options_util.h"
+#include "rocksdb/utilities/transaction_db.h"
+#include "rocksdb/iostats_context.h"
+#include "rocksdb/perf_context.h"
+#include "rocksdb/utilities/transaction.h"
+#include "rocksdb/merge_operator.h"
+#include "rocksdb/slice.h"
+#include "rocksdb/metadata.h"
+
+#include <iostream>
+#include <iterator>
+#include <fstream>
+#include <vector>
+#include <algorithm> // for std::copy
+#include <iomanip>
+#include <time.h>
+#include <thread>
+
+#define NUM_AI_THREAD 4
+#define EP 10
+void remote_preprocess(std::vector<std::string> &input_filenames, rocksdb::Options &options, int &r) {
+  compaction_data::PreprocessRequest requests;
+  compaction_data::PreprocessReply reply;
+  for(auto input_filename : input_filenames) {
+    uint64_t start_lpn;
+    uint64_t end_lpn;
+    options.spdk_fs->GetFileAddr(input_filename, &start_lpn, &end_lpn);
+    uint64_t size;
+    options.spdk_fs->GetFileSize(input_filename, rocksdb::IOOptions(), &size, nullptr);
+
+    compaction_data::PreprocessRequest::Req *req = requests.add_req();
+    req->set_fname(input_filename);
+    req->set_start_lpn(start_lpn);
+    req->set_end_lpn(end_lpn);
+    req->set_size(size);
+  }
+  options.greeter->Preprocess(requests, &reply);
+  if (reply.bmps_size() == 0)
+    r = 1;
+}
+
+void local_preprocess(std::vector<std::string> &input_filenames, rocksdb::Options &options) {
+  for(auto input_filename : input_filenames) {
+    std::vector<uint8_t> inputImage;
+    rocksdb::Slice buffer;
+    size_t kBlockSize = 1024*64;
+    char backing_store[kBlockSize];
+    std::unique_ptr<rocksdb::FSSequentialFile> f;
+    options.spdk_fs->NewSequentialFile(input_filename, rocksdb::FileOptions(), &f, nullptr);
+    rocksdb::Status status;
+    while(1) {
+      buffer.clear();
+      status = f->Read(kBlockSize, rocksdb::IOOptions(), &buffer, backing_store, nullptr);
+      if (status.ok())
+        for(size_t i = 0; i < buffer.size(); i++)
+          inputImage.push_back((uint8_t)backing_store[i]);
+      if (!status.ok() || buffer.size() < static_cast<size_t>(kBlockSize)) break;
+    }
+
+    //decode input
+    auto decoded_input = bmpxx::bmp::decode(inputImage);
+    std::vector<uint8_t> decodedImage = decoded_input.first;
+    bmpxx::BmpDesc input_description = decoded_input.second;
+    auto crop_result = bmpxx::bmp::crop(decodedImage, input_description, 0, 0, 256, 256);
+    std::vector<uint8_t> cropImage = crop_result.first;
+    bmpxx::BmpDesc crop_description = crop_result.second;
+
+    auto rotImage = bmpxx::bmp::rotate(cropImage, crop_description, 10);
+
+    std::vector<uint8_t> outputImage = bmpxx::bmp::encode(rotImage, crop_description);
+  }
+}
+
+void preprocess(std::vector<std::string> &input_filenames, rocksdb::Options &options, bool is_remote) {
+  if (is_remote) {
+    int remote_result = 0;
+    size_t i = 0;
+    std::vector<std::string> remote_filenames;
+    std::vector<std::string> local_filenames;
+    for(; i < input_filenames.size()/2; i++) {
+      remote_filenames.push_back(input_filenames[i]);
+    }
+    std::thread t(remote_preprocess, std::ref(remote_filenames), std::ref(options), std::ref(remote_result));
+    for(; i<input_filenames.size(); i++) {
+      local_filenames.push_back(input_filenames[i]);
+    }
+    local_preprocess(local_filenames, options);
+    t.join();
+    if (remote_result) {
+      local_preprocess(remote_filenames, options);
+    }
+  } else {
+    local_preprocess(input_filenames, options);
+  }
+}
+
+int main(int ac, char **av)
+{
+  rocksdb::Options options;
+  std::string dbpath("/lemma/rocksdb");
+  std::string data_path("/lemma/Images/openimages/test");
+  options.wal_dir = dbpath;
+  double total_time = 0.0;
+
+  bool is_m = (ac > 1 && av[1][0] == 'm');
+  bool is_remote = (ac > 1 && av[1][0] == 'r');
+  std::string nvme_addr = "trtype:RDMA adrfam:IPv4 traddr:11.0.0.91 trsvcid:4521 subnqn:nqn.2019-04.pos:subsystem";
+  if (ac > 2) {
+    if(atoi(av[2]) < 7)
+      nvme_addr = "trtype:RDMA adrfam:IPv4 traddr:10.0.0.90 trsvcid:4421 subnqn:nqn.2019-04.pos:subsystem";
+    nvme_addr += av[2];
+  } else {
+    nvme_addr += "7";
+  }
+  if (!is_m)
+    options.spdk_open_mode = 2;
+  options.SetSpdkEnv(nvme_addr);
+  if (is_remote)
+    options.greeter = new rocksdb::GreeterClient("11.0.0.91:50052");
+
+  if (is_m)
+    options.spdk_fs->SpdkMigration(dbpath, data_path);
+
+  rocksdb::DB* db;
+  rocksdb::Status s = rocksdb::DB::Open(options, dbpath, &db);
+
+  if (is_m)
+    return 0;
+  if(!db) printf("db nullptr\n");
+
+  for(int k = 0; k < EP; k++) {
+    struct timespec  begin, end;
+    clock_gettime(CLOCK_MONOTONIC, &begin);
+
+    int batch_size = 128;
+    int total = 0;
+
+    while (total < 4997) {
+      /*std::vector<std::string> input_filenames;
+      for(int i = 0; i < batch_size; i++) {
+        input_filenames.push_back("/lemma/rocksdb/test" + std::to_string(total++) + ".bmp");
+        if (total > 4996)
+          break;
+      }*/
+      std::vector<std::vector<std::string>> inputs(NUM_AI_THREAD);
+      for(int i = 0; i < NUM_AI_THREAD; i++) {
+        for(int j = 0; j < batch_size/NUM_AI_THREAD; j++) {
+          inputs[i].push_back("/lemma/rocksdb/test" + std::to_string(total++) + ".bmp");
+          if (total > 4996)
+            break;
+        }
+        if (total > 4996)
+          break;
+      }
+      std::vector<std::thread> t;
+      for(int i = 0; i < NUM_AI_THREAD; i++) {
+        t.push_back(std::thread(preprocess, std::ref(inputs[i]), std::ref(options), is_remote));
+      }
+      for(int i = 0; i < NUM_AI_THREAD; i++) {
+        t[i].join();
+      }
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    total_time += (end.tv_sec - begin.tv_sec) + (end.tv_nsec - begin.tv_nsec) / 1000000000.0;
+  }
+  std::cout << total_time / EP << std::endl;
+  if (is_remote) {
+    options.greeter->ReturnToken();
+  }
+  return 0;
+}

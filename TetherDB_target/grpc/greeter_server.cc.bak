@@ -1,0 +1,676 @@
+/*
+ *
+ * Copyright 2015 gRPC authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ */
+
+#include <iostream>
+#include <memory>
+#include <string>
+
+#include <grpcpp/grpcpp.h>
+#include <grpcpp/health_check_service_interface.h>
+#include <grpcpp/ext/proto_server_reflection_plugin.h>
+#include <stdio.h>
+
+#include "db/db_impl/db_impl.h"
+#include "db/compaction/compaction.h"
+#include "db/output_validator.h"
+#include "lemma/remote_compaction_job.h"
+#include "rocksdb/options.h"
+#include "grpc/compaction_data.grpc.pb.h"
+#include "rocksdb/utilities/options_util.h"
+#include "options/cf_options.h"
+#include "options/options_helper.h"
+#include "db/table_cache.h"
+#include "rocksdb/cache.h"
+#include <fcntl.h>
+#include "lemma/log_sst.h"
+#include <queue>
+#include <condition_variable>
+#include <sched.h>
+
+using grpc::Server;
+using grpc::ServerBuilder;
+using grpc::ServerContext;
+using compaction_data::CompactionRequest;
+using compaction_data::CompactionReply;
+using compaction_data::CacheRequest;
+using compaction_data::CacheReply;
+using compaction_data::Greeter;
+using compaction_data::LocalCompactionRequest;
+using compaction_data::LocalCompactionReply;
+using compaction_data::PingTestRequest;
+using compaction_data::PingTestReply;
+
+class CpuUsage {
+ public:
+  CpuUsage() {
+    statFile = fopen("/proc/stat", "r");
+    if(fscanf(statFile, "%s %lu %lu %lu %lu", cpuId, last_ji, last_ji+1, last_ji+2, last_ji+3)) {
+      std::thread thread(&CpuUsage::InternalGetUsage, this);
+      thread.detach();
+    }
+    fclose(statFile);
+  }
+
+  double GetUsage(){ return last_usage; }
+
+ private:
+  void InternalGetUsage(){
+    while(1) {
+      sleep(10);
+      statFile = fopen("/proc/stat", "r");
+      if(fscanf(statFile, "%s %lu %lu %lu %lu", cpuId, ji, ji+1, ji+2, ji+3)) {
+        uint64_t total = (ji[0] - last_ji[0]) + (ji[1] - last_ji[1]) + (ji[2] - last_ji[2]) + (ji[3] - last_ji[3]);
+        uint64_t idle = ji[3] - last_ji[3];
+        last_ji[0] = ji[0];
+        last_ji[1] = ji[1];
+        last_ji[2] = ji[2];
+        last_ji[3] = ji[3];
+        last_usage = 1.0 - (double)idle/(double)total;
+      }
+      fclose(statFile);
+    }
+  }
+
+  FILE* statFile;
+  char cpuId[5] = {0};
+  uint64_t last_ji[4] = {0};
+  uint64_t ji[4] = {0};
+  double last_usage;
+};
+
+std::string getIP(std::string input) {
+// ':'
+  std::size_t first_colon = input.find(':');
+  if (first_colon == std::string::npos) {
+    std::cerr << "Worng" << std::endl;
+    return "";
+  }
+
+  //  ':'
+  std::size_t second_colon = input.find(':', first_colon + 1);
+  if (second_colon == std::string::npos) {
+    std::cerr << "wrong." << std::endl;
+    return "";
+  }
+
+  // ':' ':'
+  std::string ip = input.substr(first_colon + 1, second_colon - first_colon - 1);
+
+  return ip;
+}
+
+// Logic and data behind the server's behavior.
+namespace ROCKSDB_NAMESPACE {
+
+std::atomic<int> job_compaction_;
+
+
+class GreeterServiceSingle {
+ public:
+#if ROCKSDB_SPDK
+  GreeterServiceSingle(std::string& spdk_conf, int queue_start, int cache_size, int mode) {
+#else
+  GreeterServiceSingle(std::string& spdk_conf, int queue_start, int cache_size, int mode) {
+#endif
+    DBOptions db_opts;
+    std::vector<ColumnFamilyDescriptor> cf_descs;
+    auto s = LoadOptionsFromFile("OPTIONS-000008", Env::Default(), &db_opts, &cf_descs);
+    fprintf(stderr, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   1111\n");
+    if(!s.ok()){
+      return;
+    }
+    fprintf(stderr, "^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^   2222\n");
+#if ROCKSDB_SPDK
+    db_opts.spdk_open_mode = mode;
+    //db_opts.SetSpdkEnv("trtype:PCIe traddr:0000:86:00.0");//lemma  
+    db_opts.SetSpdkEnv(spdk_conf, queue_start, cache_size);
+#else
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    for(int i = 0; i < 21; i++) {
+      CPU_SET(i, &mask);
+    }
+    sched_setaffinity(0, sizeof(mask), &mask);
+#endif
+    dbname_ = db_opts.wal_dir.c_str();
+    db_opts.env = Env::Default();
+    Options tmp_opts = ROCKSDB_NAMESPACE::Options(db_opts, cf_descs[1].options);
+    opts_ = SanitizeOptions(dbname_, tmp_opts);
+    MutableDBOptions mutable_db_options(opts_);
+    mutable_cf_options_ = MutableCFOptions(opts_);
+    immutable_db_options_ = ImmutableDBOptions(opts_);
+    cf_options_ = ColumnFamilyOptions(opts_);
+    FileOptions file_options(opts_);
+ 
+    const int table_cache_size = (mutable_db_options.max_open_files == -1)
+                                   ? TableCache::kInfiniteCapacity
+                                   : mutable_db_options.max_open_files - 10;
+    fprintf(stderr, "table_cache_size: %d\n", table_cache_size);
+    LRUCacheOptions co;
+    co.capacity = table_cache_size;
+    co.num_shard_bits = immutable_db_options_.table_cache_numshardbits;
+    co.metadata_charge_policy = kDontChargeCacheMetadata;
+    table_cache_ = NewLRUCache(co);
+    WriteController write_controller(mutable_db_options.delayed_write_rate);
+    BlockCacheTracer block_cache_tracer;
+    io_tracer_ = std::make_shared<IOTracer>();
+    versions_ = new VersionSet(dbname_, &immutable_db_options_, BuildDBOptions(immutable_db_options_, mutable_db_options),
+                                 table_cache_.get(), immutable_db_options_.write_buffer_manager.get(),
+                                 &write_controller, &block_cache_tracer,
+                                 io_tracer_);
+    FileSystemPtr fs_(immutable_db_options_.fs, io_tracer_);
+    file_options_for_compaction_ = FileOptions(fs_->OptimizeForCompactionTableWrite(file_options, immutable_db_options_));
+    cfd_ = versions_->GetColumnFamilySet()->CreateColumnFamily(
+        cf_descs[1].name, 1, versions_->NewDummyVersion(mutable_cf_options_), cf_options_);
+    for (int i = 0; i < 1; i++) {
+      std::thread thread(&GreeterServiceSingle::CachingThread, this);
+      thread.detach();
+    }
+#if ROCKSDB_SPDK
+    spdk_fs_ = opts_.spdk_fs;
+#endif
+    //for (int i=0; i<5; i++) {
+    //  level_count[i] = 0;
+    //}
+  }
+
+  void CachingThread() {
+    while (1) {
+      std::unique_lock<std::mutex> lk(cache_mtx_);
+      cache_cv_.wait(lk, [&] { return !cache_files_.empty();});
+      FileMetaData* meta = cache_files_.front();
+      cache_files_.pop();
+      lk.unlock();
+      if (meta->being_compacted)
+        continue;
+#if LEMMA_L0
+      std::string fname = LogFileName(immutable_db_options_.wal_dir, meta->fd.GetNumber());
+#else
+      std::string fname = TableFileName(cf_options_.cf_paths, meta->fd.GetNumber(), meta->fd.GetPathId());
+#endif
+#if DEBUG_PRINT
+      fprintf(stderr, "Caching start %s\n", fname.c_str());
+#endif
+      size_t kBlockSize = 1024*64;
+      std::unique_ptr<FSSequentialFile> f;
+#if ROCKSDB_SPDK
+      spdk_fs_->NewSequentialFile(fname, file_options_for_compaction_, &f, nullptr);
+#else
+      immutable_db_options_.fs->NewSequentialFile(fname, file_options_for_compaction_, &f, nullptr);
+#endif
+      Slice buffer;
+      int count = 0;
+      char backing_store[kBlockSize];
+      while(1) {
+        count++;
+        buffer.clear();
+        Status status = f->Read(kBlockSize, IOOptions(), &buffer, backing_store, nullptr);
+        if (!status.ok() || buffer.size() < static_cast<size_t>(kBlockSize) || meta->being_compacted) {
+#if DEBUG_PRINT
+          fprintf(stderr, "CachingThread end %s at %d times because %d %d %d\n", fname.c_str(), count, !status.ok(), buffer.size() < static_cast<size_t>(kBlockSize), meta->being_compacted);
+#endif
+          break;
+        }
+      }
+    }
+  }
+
+#if ROCKSDB_SPDK
+  grpc::Status Caching(ServerContext* /*context*/, const CacheRequest* request,
+                  CacheReply* /*reply*/) {
+    uint64_t num = request->packed_number_and_path_id() & kFileNumberMask;
+    mtx.lock();
+    version_files_[num] = FileMetaData();
+    FileMetaData* meta = &(version_files_[num]);
+    mtx.unlock();
+    meta->smallest.DecodeFrom(Slice(request->smallest()));
+    meta->largest.DecodeFrom(Slice(request->largest()));
+    meta->fd.file_size = request->file_size();
+    meta->fd.packed_number_and_path_id = request->packed_number_and_path_id();
+    meta->num_entries = request->num_entries();
+    meta->fd.largest_seqno = request->largest_seqno();
+    meta->fd.smallest_seqno = request->smallest_seqno();
+#if LEMMA_L0
+    meta->log_sst = new LogSst(immutable_db_options_, request);
+#endif
+#if LEMMA_L0
+    std::string fname = LogFileName(immutable_db_options_.wal_dir, meta->fd.GetNumber());
+#else
+    std::string fname = TableFileName(cf_options_.cf_paths, meta->fd.GetNumber(), meta->fd.GetPathId());
+#endif
+    //fprintf(stderr, "Add WAL %s\n", fname.c_str());
+#if LEVEL_CACHE
+    spdk_fs_->AddInMeta(fname, request->start_lpn(), request->end_lpn(), request->file_size(), 0);
+#else
+    spdk_fs_->AddInMeta(fname, request->start_lpn(), request->end_lpn(), request->file_size());
+#endif
+    //std::thread thread(&GreeterServiceImpl::CachingThread, this, meta);
+    //thread.detach();
+#if ROCKSDB_SPDK
+    cache_mtx_.lock();
+    cache_files_.push(meta);
+    cache_mtx_.unlock();
+    cache_cv_.notify_one();
+#endif
+    return grpc::Status::OK;
+  }
+#else
+  grpc::Status Caching(ServerContext* /*context*/, const CacheRequest* /*request*/,
+                  CacheReply* /*reply*/) {
+    return grpc::Status::OK;
+  }
+#endif
+
+#if ROCKSDB_SPDK
+  grpc::Status LocalCompactionResult(ServerContext* /*context*/, const LocalCompactionRequest* request,
+                                    LocalCompactionReply* /*reply*/) {
+    for(int i = 0; i < request->smallest_size(); i++) {
+      uint64_t num = request->packed_number_and_path_id(i) & kFileNumberMask;
+      mtx.lock();
+      version_files_[num] = FileMetaData();
+      FileMetaData* meta = &(version_files_[num]);
+      mtx.unlock();
+      meta->smallest.DecodeFrom(Slice(request->smallest(i)));
+      meta->largest.DecodeFrom(Slice(request->largest(i)));
+      meta->fd.file_size = request->file_size(i);
+      meta->fd.packed_number_and_path_id = request->packed_number_and_path_id(i);
+      meta->num_entries = request->num_entries(i);
+      meta->fd.largest_seqno = request->largest_seqno(i);
+      meta->fd.smallest_seqno = request->smallest_seqno(i);
+      std::string fname = TableFileName(cf_options_.cf_paths, meta->fd.GetNumber(), meta->fd.GetPathId());
+      //fprintf(stderr, "Add SST %s\n", fname.c_str());
+#if LEVEL_CACHE
+      spdk_fs_->AddInMeta(fname, request->start_lpn(i), request->end_lpn(i), request->file_size(i), request->level());
+#else
+      spdk_fs_->AddInMeta(fname, request->start_lpn(i), request->end_lpn(i), request->file_size(i));
+#endif
+    }
+    for(int i = 0; i < request->deleted_size(); i++) {
+      uint64_t num = request->deleted(i);
+      mtx.lock();
+      FileMetaData* meta = &(version_files_[num]);
+      mtx.unlock();
+#if LEMMA_L0
+      if (request->deleted_level(i)) {
+        std::string fname = LogFileName(immutable_db_options_.wal_dir, num);
+        spdk_fs_->DeleteFile(fname, IOOptions(), nullptr);
+      } else {
+        std::string fname = TableFileName(cf_options_.cf_paths, num, meta->fd.GetPathId());
+        spdk_fs_->DeleteFile(fname, IOOptions(), nullptr);
+      }
+#else
+      std::string fname = TableFileName(cf_options_.cf_paths, num, meta->fd.GetPathId());
+      spdk_fs_->DeleteFile(fname, IOOptions(), nullptr);
+#endif
+      mtx.lock();
+      if(meta->refs == 0)
+        version_files_.erase(num);
+      mtx.unlock();
+    }
+    return grpc::Status::OK;
+  }
+#else
+  grpc::Status LocalCompactionResult(ServerContext* /*context*/, const LocalCompactionRequest* /*request*/,
+                                    LocalCompactionReply* /*reply*/) {
+    return grpc::Status::OK;
+  }
+#endif
+
+
+  grpc::Status SayHello(ServerContext* /*context*/, const CompactionRequest* request,
+                  CompactionReply* reply) {
+    size_t result_file_count = request->result_file_count();
+    uint32_t max_subcompactions = request->max_subcompactions_();
+    std::vector<CompactionInputFiles> inputs;
+    std::vector<std::string> boundaries;
+    if (max_subcompactions > 1) {
+      for (int i = 0; i < request->boundaries_size(); i++) {
+        std::string tmp_string;
+
+        tmp_string.assign(request->boundaries(i).c_str(), request->boundaries_len(i));
+        boundaries.emplace_back(tmp_string);
+#if DEBUG_PRINT
+        fprintf(stderr, "!!!!!!%s %s %lu\n", request->boundaries(i).c_str(), tmp_string.c_str(), request->boundaries_len(i));
+#endif
+      }
+    }
+    for (auto i : request->inputs_()){
+      CompactionInputFiles compaction_input_files;
+      int lvl = i.level();
+      compaction_input_files.level = lvl;
+#if ROCKSDB_SPDK
+      mtx.lock();
+      for (auto j : i.files()){
+        FileMetaData* tmp_file = &(version_files_[j.packed_number_and_path_id() & kFileNumberMask]);
+#if DEBUG_PRINT
+        fprintf(stderr, "compaction level: %d, input: %lu, size: %lu\n", lvl, j.packed_number_and_path_id() & kFileNumberMask, tmp_file->fd.GetFileSize());
+#endif
+        compaction_input_files.files.push_back(tmp_file);
+        tmp_file->refs++;
+#if LEMMA_L0
+        if(tmp_file->log_sst != nullptr && max_subcompactions > 1) {
+          for(int cc = 0; cc < j.indexs_size(); cc++) {
+            tmp_file->log_sst->add_key_index(boundaries[cc], j.indexs(cc));
+          }
+        }
+#endif
+      }
+      mtx.unlock();
+#else
+      for (auto j : i.files()){
+        FileMetaData* file_meta_data = new FileMetaData;
+        file_meta_data->num_entries = j.num_entries();
+        file_meta_data->fd.file_size = j.file_size();
+        file_meta_data->fd.packed_number_and_path_id = j.packed_number_and_path_id();
+        file_meta_data->fd.largest_seqno = j.largest_seqno();
+        file_meta_data->smallest.DecodeFrom(Slice(j.smallest()));
+        file_meta_data->largest.DecodeFrom(Slice(j.largest()));
+        compaction_input_files.files.push_back(file_meta_data);
+      }
+#endif
+      for (auto j : i.atomic_compaction_unit_boundaries()){
+        InternalKey* smallest = new InternalKey();
+        InternalKey* largest = new InternalKey();
+        smallest->DecodeFrom(Slice(j.smallest()));
+        largest->DecodeFrom(Slice(j.largest()));
+        AtomicCompactionUnitBoundary atomic_compaction_unit_boundary(smallest, largest);
+        compaction_input_files.atomic_compaction_unit_boundaries.push_back(atomic_compaction_unit_boundary);
+      }
+      inputs.push_back(compaction_input_files);
+    }
+
+    std::vector<FileMetaData*> grandparents;
+#if ROCKSDB_SPDK
+    mtx.lock();
+    //level_count[request->output_level_()]++;
+    for (auto i : request->grandparents_()){
+      grandparents.push_back(&(version_files_[i.packed_number_and_path_id() & kFileNumberMask]));
+      grandparents.back()->refs++;
+    }
+    mtx.unlock();
+#else
+    for (auto i : request->grandparents_()){
+      FileMetaData* file_meta_data = new FileMetaData;
+      file_meta_data->smallest.DecodeFrom(Slice(i.smallest()));
+      file_meta_data->largest.DecodeFrom(Slice(i.largest()));
+      file_meta_data->fd.file_size = i.file_size();
+      grandparents.push_back(file_meta_data);
+    }
+#endif
+
+    //for (int i=0; i<5; i++)
+      //fprintf(stderr, "level: %d, num: %lu\n", i, level_count[i]);
+
+
+    FSDirectory* directory = cfd_->GetDataDir(0);
+
+    CompressionOptions compression_opts(request->output_compression_opts_().window_bits(),
+             request->output_compression_opts_().level(), request->output_compression_opts_().strategy(),
+             request->output_compression_opts_().max_dict_bytes(), request->output_compression_opts_().zstd_max_train_bytes(),
+             request->output_compression_opts_().parallel_threads(), request->output_compression_opts_().enabled());
+    Compaction c(cfd_, request->output_level_(),
+             request->max_output_file_size_(), mutable_cf_options_.max_compaction_bytes,
+             max_subcompactions, ImmutableCFOptions(opts_),
+             mutable_cf_options_, request->number_levels_(), request->output_path_id_(),
+             static_cast<CompressionType>(request->output_compression_()), compression_opts,
+             request->score_(), inputs, grandparents, request->bottommost_level_(),
+             request->is_full_compaction_(), request->is_manual_compaction_(),
+             Slice(request->smallest_user_key_()),
+             Slice(request->largest_user_key_()),
+             static_cast<CompactionReason>(request->compaction_reason_()));
+
+    if(result_file_count > 100)
+      fprintf(stderr, "over 100!!! %lu, %d, %d, level0: %lu, level1: %lu\n", result_file_count, c.start_level(), c.output_level(), c.num_input_files(0), c.num_input_files(1));
+
+
+    std::vector<SequenceNumber> existing_snapshots;
+    bool is_manual = request->is_manual();
+    std::atomic<int> manual_compaction_paused;
+    const std::atomic<bool> shutting_down(request->shutting_down());
+    CompactionJobStats compaction_job_stats;
+    if(is_manual)
+      manual_compaction_paused = request->manual_compaction_paused();
+#if ROCKSDB_SPDK
+    uint64_t* start_lpns = (uint64_t*)malloc(sizeof(uint64_t)*result_file_count);
+    for (size_t i=0; i<result_file_count; i++){
+      start_lpns[i] = request->start_lpns(i);
+    }
+#endif
+    RemoteCompactionJob compaction_job(
+        request->job_id(), &c, immutable_db_options_,
+        file_options_for_compaction_, versions_,
+        &shutting_down, request->preserve_deletes_seqnum(),
+        directory, directory, directory, existing_snapshots,
+        request->earliest_write_conflict_snapshot(),
+        table_cache_, dbname_, &compaction_job_stats,
+        static_cast<Env::Priority>(request->thread_pri()), io_tracer_,
+        result_file_count, request->result_file_number(), request->base_level(),
+#if ROCKSDB_SPDK
+        start_lpns,
+#endif
+        is_manual ? &manual_compaction_paused : nullptr, request->db_id(),
+        request->db_session_id(), request->full_history_ts_low());
+
+    if (max_subcompactions > 1) {
+      for (auto& i : boundaries) {
+        compaction_job.boundaries_.emplace_back(i);
+      }
+    }
+    compaction_job.Prepare();
+
+    job_compaction_ += max_subcompactions;
+    fprintf(stderr, "%d\n", job_compaction_.load());
+    compaction_job.Run(reply).PermitUncheckedError();
+    job_compaction_ -= max_subcompactions;
+#if ROCKSDB_SPDK
+    compaction_job.RemoteInstall(version_files_);
+    for (auto& i : inputs){
+      for (auto& j : i.files){
+        TableCache::Evict(table_cache_.get(), j->fd.GetNumber());
+#if LEMMA_L0
+        if (j->log_sst != nullptr) {
+          std::string fname = LogFileName(immutable_db_options_.wal_dir, j->fd.GetNumber());
+          spdk_fs_->DeleteFile(fname, IOOptions(), nullptr);
+        } else {
+          std::string fname = TableFileName(cf_options_.cf_paths, j->fd.GetNumber(), j->fd.GetPathId());
+          spdk_fs_->DeleteFile(fname, IOOptions(), nullptr);
+        }
+#else
+        std::string fname = TableFileName(cf_options_.cf_paths, j->fd.GetNumber(), j->fd.GetPathId());
+        spdk_fs_->DeleteFile(fname, IOOptions(), nullptr);
+#endif
+
+        mtx.lock();
+        j->refs--;
+        if(j->refs == 0) {
+          version_files_.erase(j->fd.GetNumber());
+        }
+        mtx.unlock();
+      }
+    }
+    for (auto& i : grandparents) {
+      mtx.lock();
+      i->refs--;
+      if(i->refs == 0 && i->being_compacted) {
+        version_files_.erase(i->fd.GetNumber());
+      }
+      mtx.unlock();
+    }
+    free(start_lpns);
+#else
+    for (auto input : inputs) {
+      for (auto f : input.files) {
+        TableCache::Evict(table_cache_.get(), f->fd.GetNumber());
+        delete f;
+      }
+    }
+    inputs.clear();
+    for (auto g : grandparents) {
+      delete g;
+    }
+    grandparents.clear();
+#endif
+
+    return grpc::Status::OK;
+  }
+ private:
+  Options opts_;
+  ColumnFamilyOptions cf_options_;
+  MutableCFOptions mutable_cf_options_;
+  ColumnFamilyData* cfd_;
+  ImmutableDBOptions immutable_db_options_;
+  std::string dbname_;
+  VersionSet* versions_;
+  std::shared_ptr<IOTracer> io_tracer_;
+  std::shared_ptr<Cache> table_cache_;
+  FileOptions file_options_for_compaction_;
+  //uint64_t level_count[5];
+#if ROCKSDB_SPDK
+  RemoteVersion version_files_;
+  FileSystem* spdk_fs_;
+  std::mutex mtx;
+#endif
+
+  std::map<uint64_t, char> cache_inputs;
+
+  CpuUsage* cpu_usage;
+  std::atomic<int> test_local_;
+
+  //std::atomic<int> job_cache_;
+  //std::atomic<int> job_compaction_;
+
+  std::queue<FileMetaData*> cache_files_;
+  std::mutex cache_mtx_;
+  std::condition_variable cache_cv_;
+};
+
+class GreeterServiceImpl final : public Greeter::Service {
+ public:
+  void AddService(std::string cip, std::string& spdk_conf, int queue_start, int cache_size, int mode) {
+    services[cip] = new GreeterServiceSingle(spdk_conf, queue_start, cache_size, mode);
+  }
+
+  grpc::Status PingTest(ServerContext* /*context*/, const PingTestRequest* /*request*/,
+                  PingTestReply* /*reply*/) override {
+    return grpc::Status::OK;
+  }
+
+  grpc::Status Caching(ServerContext* context, const CacheRequest* request,
+                  CacheReply* reply) override {
+    return services[getIP(context->peer())]->Caching(context, request, reply);
+  }
+
+  grpc::Status LocalCompactionResult(ServerContext* context, const LocalCompactionRequest* request,
+                                    LocalCompactionReply* reply) override {
+    //fprintf(stderr, "LocalCompactionResult %s\n", getIP(context->peer()).c_str());
+    return services[getIP(context->peer())]->LocalCompactionResult(context, request, reply);
+  }
+
+  grpc::Status SayHello(ServerContext* context, const CompactionRequest* request,
+                  CompactionReply* reply) override {
+    //if (request->output_level_() < 3)
+    if ((request->output_level_() < 2) || (request->output_level_() == 2 && job_compaction_ <= 25))
+      return services[getIP(context->peer())]->SayHello(context, request, reply);
+    else
+      return grpc::Status::OK;
+  }
+
+ private:
+  std::map<std::string, GreeterServiceSingle*> services;
+};
+
+
+void RunServer(std::string& server_address, std::string& spdk_conf, int queue_start, int cache_size, int mode = 0) {
+  GreeterServiceImpl service;
+  std::string spdk_conf4 = spdk_conf + "4";
+  std::string spdk_conf6 = spdk_conf + "6";
+  std::string spdk_conf8 = spdk_conf + "8";
+  service.AddService("11.0.0.5", spdk_conf4, queue_start, cache_size, mode);
+  service.AddService("11.0.0.7", spdk_conf6, queue_start, cache_size, mode);
+  service.AddService("11.0.0.10", spdk_conf8, queue_start, cache_size, mode);
+
+
+  //GreeterServiceImpl service;
+  grpc::EnableDefaultHealthCheckService(true);
+  grpc::reflection::InitProtoReflectionServerBuilderPlugin();
+  ServerBuilder builder;
+  builder.SetMaxMessageSize(-1);
+  builder.SetMaxReceiveMessageSize(-1);
+  builder.SetMaxSendMessageSize(-1);
+  fprintf(stderr, "%d", GRPC_DEFAULT_MAX_RECV_MESSAGE_LENGTH);
+  // Listen on the given address without any authentication mechanism.
+  builder.AddListeningPort(server_address, grpc::InsecureServerCredentials());
+  // Register "service" as the instance through which we'll communicate with
+  // clients. In this case it corresponds to an *synchronous* service.
+  builder.RegisterService(&service);
+  // Finally assemble the server.
+  std::unique_ptr<Server> server(builder.BuildAndStart());
+  std::cout << "Server listening on " << server_address << std::endl;
+
+  // Wait for the server to shutdown. Note that some other thread must be
+  // responsible for shutting down the server for this call to ever return.
+  server->Wait();
+}
+
+} //namespace ROCKSDB_NAMESPACE
+
+int main(int argc, char* argv[]) {
+  if(argc < 2){
+    std::string server_add("11.0.0.91:50052");
+    //std::string spdk_conf("trtype:RDMA adrfam:IPv4 traddr:10.0.0.90 trsvcid:4421 subnqn:nqn.2016-06.io.spdk:cnode1");
+    //std::string spdk_conf("trtype:RDMA adrfam:IPv4 traddr:10.0.0.90 trsvcid:4421 subnqn:nqn.2019-04.pos:subsystem1");
+    std::string spdk_conf("trtype:RDMA adrfam:IPv4 traddr:11.0.0.91 trsvcid:4521 subnqn:nqn.2019-04.pos:subsystem");
+    int queue_start = 0;
+    int cache_size = 30;
+    //int cache_size = 30;
+
+    rocksdb::RunServer(server_add, spdk_conf, queue_start, cache_size);
+  } else {
+    //std::string server_add(argv[1]);
+    //server_add += ":";
+    std::string server_add("");
+    std::string spdk_conf("");
+    if(atoi(argv[1]) <= 4) {
+      server_add += "10.0.0.90:";
+      spdk_conf += "trtype:RDMA adrfam:IPv4 traddr:10.0.0.90 trsvcid:4421 subnqn:nqn.2019-04.pos:subsystem";
+    } else {
+      server_add += "11.0.0.91:";
+      spdk_conf += "trtype:RDMA adrfam:IPv4 traddr:11.0.0.91 trsvcid:4521 subnqn:nqn.2019-04.pos:subsystem";
+    }
+    server_add += std::to_string(50051 + atoi(argv[1]));
+    spdk_conf += argv[1];
+    //spdk_conf += " trsvcid:4421";
+    //spdk_conf += argv[3];
+    //spdk_conf += " subnqn:nqn.2019-04.pos:subsystem";
+    //spdk_conf += " subnqn:nqn.2016-06.io.spdk:cnode";
+
+    //std::string spdk_conf("trtype:RDMA adrfam:IPv4 traddr:10.0.0.90 trsvcid:442");
+    //spdk_conf += argv[1];
+    //spdk_conf += " subnqn:nqn.2019-04.pos:subsystem";
+    //spdk_conf += argv[1];
+    int queue_start = 0; //atoi(argv[4]) - 1;
+    int cache_size = 10; //atoi(argv[5]);
+
+    //int mode = 0;
+    //if (argc > 2)
+    //  mode = atoi(argv[2]);
+
+    rocksdb::RunServer(server_add, spdk_conf, queue_start, cache_size);
+  }
+  return 0;
+}

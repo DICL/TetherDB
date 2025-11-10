@@ -1,0 +1,332 @@
+monitoring/thread_status_util.cc:25:  thread_updater_local_cache_->RegisterThread(thread_type, env->GetThreadID());
+monitoring/thread_status_util.cc:31:    thread_updater_local_cache_->UnregisterThread();
+monitoring/thread_status_util.cc:44:    thread_updater_local_cache_->SetColumnFamilyInfoKey(cfd);
+monitoring/thread_status_util.cc:49:    thread_updater_local_cache_->SetColumnFamilyInfoKey(nullptr);
+monitoring/thread_status_util.cc:62:    thread_updater_local_cache_->SetOperationStartTime(current_time);
+monitoring/thread_status_util.cc:66:    thread_updater_local_cache_->SetOperationStartTime(0);
+monitoring/thread_status_util.cc:68:  thread_updater_local_cache_->SetThreadOperation(op);
+monitoring/thread_status_util.cc:79:  return thread_updater_local_cache_->SetThreadOperationStage(stage);
+monitoring/thread_status_util.cc:89:  thread_updater_local_cache_->SetThreadOperationProperty(code, value);
+monitoring/thread_status_util.cc:100:  thread_updater_local_cache_->IncreaseThreadOperationProperty(code, delta);
+monitoring/thread_status_util.cc:110:  thread_updater_local_cache_->SetThreadState(state);
+monitoring/thread_status_util.cc:117:  thread_updater_local_cache_->ResetThreadStatus();
+monitoring/thread_status_util.cc:129:    thread_updater_local_cache_->NewColumnFamilyInfo(db, db->GetName(), cfd,
+monitoring/thread_status_util.cc:138:  thread_updater_local_cache_->EraseColumnFamilyInfo(cfd);
+db/table_cache.h:193:    if (cache_->GetCapacity() >= kInfiniteCapacity) {
+db/version_set.cc:1008:    return table_cache_->NewIterator(
+db/version_set.cc:1836:    const Status s = blob_file_cache_->GetBlobFileReader(blob_file_number,
+db/version_set.cc:1913:    *status = table_cache_->Get(
+db/version_set.cc:2071:    s = table_cache_->MultiGet(
+db/version_set.cc:3810:      table_cache_->Release(file.metadata->table_reader_handle);
+db/repair.cc:502:      status = table_cache_->GetTableProperties(env_options_, icmp_, t->meta.fd,
+db/repair.cc:542:      InternalIterator* iter = table_cache_->NewIterator(
+db/db_logical_block_size_cache_test.cc:20:    return cache_->RefAndCacheLogicalBlockSize(paths);
+db/db_logical_block_size_cache_test.cc:24:    cache_->UnrefAndTryRemoveCachedLogicalBlockSize(paths);
+db/db_logical_block_size_cache_test.cc:82:    ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:83:    ASSERT_TRUE(cache_->Contains(data_path_0_));
+db/db_logical_block_size_cache_test.cc:84:    ASSERT_EQ(1, cache_->GetRefCount(data_path_0_));
+db/db_logical_block_size_cache_test.cc:85:    ASSERT_TRUE(cache_->Contains(data_path_1_));
+db/db_logical_block_size_cache_test.cc:86:    ASSERT_EQ(1, cache_->GetRefCount(data_path_1_));
+db/db_logical_block_size_cache_test.cc:88:    ASSERT_EQ(0, cache_->Size());
+db/db_logical_block_size_cache_test.cc:114:    ASSERT_EQ(1, cache_->Size());
+db/db_logical_block_size_cache_test.cc:115:    ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:116:    ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:118:    ASSERT_EQ(0, cache_->Size());
+db/db_logical_block_size_cache_test.cc:135:  ASSERT_EQ(1, cache_->Size());
+db/db_logical_block_size_cache_test.cc:136:  ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:137:  ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:141:  ASSERT_EQ(3, cache_->Size());
+db/db_logical_block_size_cache_test.cc:142:  ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:143:  ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:144:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:145:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:146:  ASSERT_TRUE(cache_->Contains(cf_path_1_));
+db/db_logical_block_size_cache_test.cc:147:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_1_));
+db/db_logical_block_size_cache_test.cc:151:  ASSERT_EQ(3, cache_->Size());
+db/db_logical_block_size_cache_test.cc:152:  ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:153:  ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:154:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:155:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:156:  ASSERT_TRUE(cache_->Contains(cf_path_1_));
+db/db_logical_block_size_cache_test.cc:157:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_1_));
+db/db_logical_block_size_cache_test.cc:161:  ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:162:  ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:165:  ASSERT_EQ(0, cache_->Size());
+db/db_logical_block_size_cache_test.cc:181:  ASSERT_EQ(1, cache_->Size());
+db/db_logical_block_size_cache_test.cc:182:  ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:183:  ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:187:  ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:188:  ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:189:  ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:190:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:191:  ASSERT_EQ(2, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:196:    ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:197:    ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:198:    ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:199:    ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:200:    ASSERT_EQ(2, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:206:  ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:207:  ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:208:  ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:209:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:210:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:214:  ASSERT_EQ(1, cache_->Size());
+db/db_logical_block_size_cache_test.cc:215:  ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:216:  ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:219:  ASSERT_EQ(0, cache_->Size());
+db/db_logical_block_size_cache_test.cc:246:    ASSERT_EQ(0, cache_->Size());
+db/db_logical_block_size_cache_test.cc:270:    ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:271:    ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:272:    ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:273:    ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:274:    ASSERT_EQ(2, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:279:    ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:280:    ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:281:    ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:282:    ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:283:    ASSERT_EQ(2, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:287:    ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:288:    ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:289:    ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:290:    ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:291:    ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:295:    ASSERT_EQ(1, cache_->Size());
+db/db_logical_block_size_cache_test.cc:296:    ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:297:    ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:302:    ASSERT_EQ(1, cache_->Size());
+db/db_logical_block_size_cache_test.cc:303:    ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:304:    ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:307:    ASSERT_EQ(0, cache_->Size());
+db/db_logical_block_size_cache_test.cc:325:  ASSERT_EQ(1, cache_->Size());
+db/db_logical_block_size_cache_test.cc:326:  ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:327:  ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:330:  ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:331:  ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:332:  ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:333:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:334:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:338:  ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:339:  ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:340:  ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:341:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:342:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:345:  ASSERT_EQ(0, cache_->Size());
+db/db_logical_block_size_cache_test.cc:366:    ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:367:    ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:368:    ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:369:    ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:370:    ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:375:    ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:376:    ASSERT_TRUE(cache_->Contains(dbname_));
+db/db_logical_block_size_cache_test.cc:377:    ASSERT_EQ(1, cache_->GetRefCount(dbname_));
+db/db_logical_block_size_cache_test.cc:378:    ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:379:    ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:382:    ASSERT_EQ(0, cache_->Size());
+db/db_logical_block_size_cache_test.cc:398:  ASSERT_EQ(1, cache_->Size());
+db/db_logical_block_size_cache_test.cc:399:  ASSERT_TRUE(cache_->Contains(data_path_0_));
+db/db_logical_block_size_cache_test.cc:405:  ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:406:  ASSERT_TRUE(cache_->Contains(data_path_0_));
+db/db_logical_block_size_cache_test.cc:407:  ASSERT_EQ(1, cache_->GetRefCount(data_path_0_));
+db/db_logical_block_size_cache_test.cc:408:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:409:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:413:  ASSERT_EQ(3, cache_->Size());
+db/db_logical_block_size_cache_test.cc:414:  ASSERT_TRUE(cache_->Contains(data_path_0_));
+db/db_logical_block_size_cache_test.cc:415:  ASSERT_EQ(1, cache_->GetRefCount(data_path_0_));
+db/db_logical_block_size_cache_test.cc:416:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:417:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:418:  ASSERT_TRUE(cache_->Contains(data_path_1_));
+db/db_logical_block_size_cache_test.cc:419:  ASSERT_EQ(1, cache_->GetRefCount(data_path_1_));
+db/db_logical_block_size_cache_test.cc:425:  ASSERT_EQ(4, cache_->Size());
+db/db_logical_block_size_cache_test.cc:426:  ASSERT_TRUE(cache_->Contains(data_path_0_));
+db/db_logical_block_size_cache_test.cc:427:  ASSERT_EQ(1, cache_->GetRefCount(data_path_0_));
+db/db_logical_block_size_cache_test.cc:428:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:429:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:430:  ASSERT_TRUE(cache_->Contains(data_path_1_));
+db/db_logical_block_size_cache_test.cc:431:  ASSERT_EQ(1, cache_->GetRefCount(data_path_1_));
+db/db_logical_block_size_cache_test.cc:432:  ASSERT_TRUE(cache_->Contains(cf_path_1_));
+db/db_logical_block_size_cache_test.cc:433:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_1_));
+db/db_logical_block_size_cache_test.cc:437:  ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:438:  ASSERT_TRUE(cache_->Contains(data_path_1_));
+db/db_logical_block_size_cache_test.cc:439:  ASSERT_EQ(1, cache_->GetRefCount(data_path_1_));
+db/db_logical_block_size_cache_test.cc:440:  ASSERT_TRUE(cache_->Contains(cf_path_1_));
+db/db_logical_block_size_cache_test.cc:441:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_1_));
+db/db_logical_block_size_cache_test.cc:446:  ASSERT_EQ(0, cache_->Size());
+db/db_logical_block_size_cache_test.cc:464:  ASSERT_EQ(1, cache_->Size());
+db/db_logical_block_size_cache_test.cc:465:  ASSERT_TRUE(cache_->Contains(data_path_0_));
+db/db_logical_block_size_cache_test.cc:466:  ASSERT_EQ(1, cache_->GetRefCount(data_path_0_));
+db/db_logical_block_size_cache_test.cc:470:  ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:471:  ASSERT_TRUE(cache_->Contains(data_path_0_));
+db/db_logical_block_size_cache_test.cc:472:  ASSERT_EQ(1, cache_->GetRefCount(data_path_0_));
+db/db_logical_block_size_cache_test.cc:473:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:474:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:478:  ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:479:  ASSERT_TRUE(cache_->Contains(data_path_0_));
+db/db_logical_block_size_cache_test.cc:480:  ASSERT_EQ(2, cache_->GetRefCount(data_path_0_));
+db/db_logical_block_size_cache_test.cc:481:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:482:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:486:  ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:487:  ASSERT_TRUE(cache_->Contains(data_path_0_));
+db/db_logical_block_size_cache_test.cc:488:  ASSERT_EQ(2, cache_->GetRefCount(data_path_0_));
+db/db_logical_block_size_cache_test.cc:489:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:490:  ASSERT_EQ(2, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:494:  ASSERT_EQ(2, cache_->Size());
+db/db_logical_block_size_cache_test.cc:495:  ASSERT_TRUE(cache_->Contains(data_path_0_));
+db/db_logical_block_size_cache_test.cc:496:  ASSERT_EQ(1, cache_->GetRefCount(data_path_0_));
+db/db_logical_block_size_cache_test.cc:497:  ASSERT_TRUE(cache_->Contains(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:498:  ASSERT_EQ(1, cache_->GetRefCount(cf_path_0_));
+db/db_logical_block_size_cache_test.cc:503:  ASSERT_EQ(0, cache_->Size());
+db/blob/blob_file_cache.cc:46:  Cache::Handle* handle = cache_->Lookup(key);
+db/blob/blob_file_cache.cc:57:  handle = cache_->Lookup(key);
+db/blob/blob_file_cache.cc:84:    const Status s = cache_->Insert(key, reader.get(), charge,
+db/version_builder.cc:228:        table_cache_->ReleaseHandle(f->table_reader_handle);
+db/version_builder.cc:904:    size_t table_cache_capacity = table_cache_->get_cache()->GetCapacity();
+db/version_builder.cc:926:      size_t table_cache_usage = table_cache_->get_cache()->GetUsage();
+db/version_builder.cc:965:        statuses[file_idx] = table_cache_->FindTable(
+db/version_builder.cc:974:          file_meta->fd.table_reader = table_cache_->GetTableReaderFromHandle(
+db/table_cache.cc:90:  return reinterpret_cast<TableReader*>(cache_->Value(handle));
+db/table_cache.cc:94:  cache_->Release(handle);
+db/table_cache.cc:153:  cache_->Erase(key);
+db/table_cache.cc:169:  *handle = cache_->Lookup(key);
+db/table_cache.cc:179:    *handle = cache_->Lookup(key);
+db/table_cache.cc:197:      s = cache_->Insert(key, table_reader.get(), 1, &DeleteEntry<TableReader>,
+db/db_basic_test.cc:2755:  int num_lookups() { return uncompressed_cache_->num_lookups(); }
+db/db_basic_test.cc:2756:  int num_found() { return uncompressed_cache_->num_found(); }
+db/db_basic_test.cc:2757:  int num_inserts() { return uncompressed_cache_->num_inserts(); }
+db/db_basic_test.cc:2759:  int num_lookups_compressed() { return compressed_cache_->num_lookups(); }
+db/db_basic_test.cc:2760:  int num_found_compressed() { return compressed_cache_->num_found(); }
+db/db_basic_test.cc:2761:  int num_inserts_compressed() { return compressed_cache_->num_inserts(); }
+db/db_basic_test.cc:3083:    uncompressed_cache_->SetCapacity(0);
+db/db_basic_test.cc:3084:    uncompressed_cache_->SetCapacity(1048576);
+db/version_set.h:1225:    table_cache_->Erase(GetSlice(&blob_file_number));
+db/db_impl/db_impl_files.cc:388:      table_cache_->Release(file.metadata->table_reader_handle);
+db/db_impl/db_impl.cc:622:  table_cache_->EraseUnRefEntries();
+table/block_based/cachable_entry.h:186:      cache_->Release(cache_handle_);
+cache/cache_helpers.h:99:    cache_->Release(handle_);
+cache/lru_cache_test.cc:22:      cache_->~LRUCacheShard();
+cache/lru_cache_test.cc:40:    EXPECT_OK(cache_->Insert(key, 0 /*hash*/, nullptr /*value*/, 1 /*charge*/,
+cache/lru_cache_test.cc:50:    auto handle = cache_->Lookup(key, 0 /*hash*/);
+cache/lru_cache_test.cc:52:      cache_->Release(handle);
+cache/lru_cache_test.cc:60:  void Erase(const std::string& key) { cache_->Erase(key, 0 /*hash*/); }
+cache/lru_cache_test.cc:66:    cache_->TEST_GetLRUList(&lru, &lru_low_pri);
+cache/cache_test.cc:337:  Cache::Handle* h1 = cache_->Lookup(EncodeKey(100));
+cache/cache_test.cc:338:  ASSERT_EQ(101, DecodeValue(cache_->Value(h1)));
+cache/cache_test.cc:339:  ASSERT_EQ(1U, cache_->GetUsage());
+cache/cache_test.cc:342:  Cache::Handle* h2 = cache_->Lookup(EncodeKey(100));
+cache/cache_test.cc:343:  ASSERT_EQ(102, DecodeValue(cache_->Value(h2)));
+cache/cache_test.cc:345:  ASSERT_EQ(2U, cache_->GetUsage());
+cache/cache_test.cc:347:  cache_->Release(h1);
+cache/cache_test.cc:351:  ASSERT_EQ(1U, cache_->GetUsage());
+cache/cache_test.cc:356:  ASSERT_EQ(1U, cache_->GetUsage());
+cache/cache_test.cc:358:  cache_->Release(h2);
+cache/cache_test.cc:362:  ASSERT_EQ(0U, cache_->GetUsage());
+cache/cache_test.cc:380:  Cache::Handle* h = cache_->Lookup(EncodeKey(100));
+cache/cache_test.cc:381:  ASSERT_TRUE(cache_->Ref(h));
+cache/cache_test.cc:382:  ASSERT_EQ(101, DecodeValue(cache_->Value(h)));
+cache/cache_test.cc:383:  ASSERT_EQ(1U, cache_->GetUsage());
+cache/cache_test.cc:390:      cache_->Release(h);
+cache/cache_test.cc:413:  Cache::Handle* h201 = cache_->Lookup(EncodeKey(200));
+cache/cache_test.cc:414:  Cache::Handle* h202 = cache_->Lookup(EncodeKey(201));
+cache/cache_test.cc:415:  Cache::Handle* h203 = cache_->Lookup(EncodeKey(202));
+cache/cache_test.cc:416:  Cache::Handle* h204 = cache_->Lookup(EncodeKey(203));
+cache/cache_test.cc:446:  cache_->Release(h201);
+cache/cache_test.cc:447:  cache_->Release(h202);
+cache/cache_test.cc:448:  cache_->Release(h203);
+cache/cache_test.cc:449:  cache_->Release(h204);
+cache/cache_test.cc:472:  Cache::Handle* h1 = cache_->Lookup(EncodeKey(100));
+cache/cache_test.cc:473:  Cache::Handle* h2 = cache_->Lookup(EncodeKey(100));
+cache/cache_test.cc:475:  ASSERT_EQ(DecodeValue(cache_->Value(h1)), 1000);
+cache/cache_test.cc:476:  ASSERT_EQ(DecodeValue(cache_->Value(h2)), 1000);
+cache/cache_test.cc:484:  cache_->Release(h1);
+cache/cache_test.cc:488:  cache_->Release(h2);
+cache/cache_test.cc:519:  uint64_t a = cache_->NewId();
+cache/cache_test.cc:520:  uint64_t b = cache_->NewId();
+cache/cache_test.cc:729:  cache_->ApplyToAllCacheEntries(callback, true);
+cache/cache_test.cc:754:  Cache::Handle* h1 = cache_->Lookup(EncodeKey(1));
+cache/cache_test.cc:755:  ASSERT_EQ(2, DecodeValue(cache_->Value(h1)));
+cache/cache_test.cc:756:  ASSERT_EQ(1, cache_->GetCharge(h1));
+cache/cache_test.cc:757:  cache_->Release(h1);
+cache/cache_bench.cc:208:      cache_->Insert(keygen.GetRand(rnd, max_key_), createValue(rnd),
+cache/cache_bench.cc:296:          cache_->Release(handle);
+cache/cache_bench.cc:300:        handle = cache_->Lookup(key);
+cache/cache_bench.cc:303:          result += NPHash64(static_cast<char*>(cache_->Value(handle)),
+cache/cache_bench.cc:307:          cache_->Insert(key, createValue(thread->rnd), FLAGS_value_bytes,
+cache/cache_bench.cc:312:          cache_->Release(handle);
+cache/cache_bench.cc:316:        cache_->Insert(key, createValue(thread->rnd), FLAGS_value_bytes,
+cache/cache_bench.cc:320:          cache_->Release(handle);
+cache/cache_bench.cc:324:        handle = cache_->Lookup(key);
+cache/cache_bench.cc:327:          result += NPHash64(static_cast<char*>(cache_->Value(handle)),
+cache/cache_bench.cc:332:        cache_->Erase(key);
+cache/cache_bench.cc:339:      cache_->Release(handle);
+tools/db_bench_tool.cc:2825:      cache_->DisownData();
+memtable/write_buffer_manager.cc:74:        cache_rep_->cache_->Release(handle, true);
+memtable/write_buffer_manager.cc:96:        cache_rep_->cache_->Insert(cache_rep_->GetNextCacheKey(), nullptr,
+memtable/write_buffer_manager.cc:138:      cache_rep_->cache_->Release(handle, true);
+utilities/persistent_cache/persistent_cache_bench.cc:143:    cache_->TEST_Flush();
+utilities/persistent_cache/persistent_cache_bench.cc:144:    cache_->Close();
+utilities/persistent_cache/persistent_cache_bench.cc:161:        << cache_->PrintStats() << std::endl;
+utilities/persistent_cache/persistent_cache_bench.cc:176:    cache_->TEST_Flush();
+utilities/persistent_cache/persistent_cache_bench.cc:199:      Status status = cache_->Insert(block_key, block.get(), FLAGS_iosize);
+utilities/persistent_cache/persistent_cache_bench.cc:232:    Status status = cache_->Lookup(key, &block, &size);
+utilities/persistent_cache/persistent_cache_test.h:40:      Status s = cache_->Close();
+utilities/persistent_cache/persistent_cache_test.h:49:      cache_->TEST_Flush();
+utilities/persistent_cache/persistent_cache_test.h:138:        Status status = cache_->Insert(key, data, sizeof(data));
+utilities/persistent_cache/persistent_cache_test.h:165:        if (!cache_->Lookup(key, &block, &block_size).ok()) {
+utilities/persistent_cache/persistent_cache_test.h:172:      ASSERT_OK(cache_->Lookup(key, &block, &block_size));
+utilities/persistent_cache/persistent_cache_test.h:186:    ASSERT_OK(cache_->Close());
+utilities/persistent_cache/persistent_cache_test.h:197:    ASSERT_OK(cache_->Close());
+utilities/persistent_cache/persistent_cache_test.h:209:    ASSERT_OK(cache_->Close());
+utilities/persistent_cache/block_cache_tier_file.cc:580:    while (!cache_->Reserve(io.buf_->Used())) {
+utilities/simulator_cache/cache_simulator.cc:20:  auto handle = sim_cache_->Lookup(lookup_key);
+utilities/simulator_cache/cache_simulator.cc:22:    sim_cache_->Release(handle);
+utilities/simulator_cache/cache_simulator.cc:26:  auto s = sim_cache_->Insert(lookup_key, /*value=*/nullptr, lookup_key.size(),
+utilities/simulator_cache/cache_simulator.cc:42:    admit = ghost_cache_->Admit(access.block_key);
+utilities/simulator_cache/cache_simulator.cc:44:  auto handle = sim_cache_->Lookup(access.block_key);
+utilities/simulator_cache/cache_simulator.cc:46:    sim_cache_->Release(handle);
+utilities/simulator_cache/cache_simulator.cc:51:      auto s = sim_cache_->Insert(access.block_key, /*value=*/nullptr,
+utilities/simulator_cache/cache_simulator.cc:101:    *admitted = ghost_cache_->Admit(key);
+utilities/simulator_cache/cache_simulator.cc:103:  auto handle = sim_cache_->Lookup(key);
+utilities/simulator_cache/cache_simulator.cc:105:    sim_cache_->Release(handle);
+utilities/simulator_cache/cache_simulator.cc:109:    auto s = sim_cache_->Insert(key, /*value=*/nullptr, value_size,
+utilities/simulator_cache/cache_simulator.cc:188:      auto s = sim_cache_->Insert(row_key, /*value=*/nullptr,
+utilities/simulator_cache/sim_cache.cc:164:  void SetCapacity(size_t capacity) override { cache_->SetCapacity(capacity); }
+utilities/simulator_cache/sim_cache.cc:167:    cache_->SetStrictCapacityLimit(strict_capacity_limit);
+utilities/simulator_cache/sim_cache.cc:178:    Handle* h = key_only_cache_->Lookup(key);
+utilities/simulator_cache/sim_cache.cc:181:      auto s = key_only_cache_->Insert(
+utilities/simulator_cache/sim_cache.cc:186:      key_only_cache_->Release(h);
+utilities/simulator_cache/sim_cache.cc:193:    return cache_->Insert(key, value, charge, deleter, handle, priority);
+utilities/simulator_cache/sim_cache.cc:197:    Handle* h = key_only_cache_->Lookup(key);
+utilities/simulator_cache/sim_cache.cc:199:      key_only_cache_->Release(h);
+utilities/simulator_cache/sim_cache.cc:211:    return cache_->Lookup(key, stats);
+utilities/simulator_cache/sim_cache.cc:214:  bool Ref(Handle* handle) override { return cache_->Ref(handle); }
+utilities/simulator_cache/sim_cache.cc:217:    return cache_->Release(handle, force_erase);
+utilities/simulator_cache/sim_cache.cc:221:    cache_->Erase(key);
+utilities/simulator_cache/sim_cache.cc:222:    key_only_cache_->Erase(key);
+utilities/simulator_cache/sim_cache.cc:225:  void* Value(Handle* handle) override { return cache_->Value(handle); }
+utilities/simulator_cache/sim_cache.cc:227:  uint64_t NewId() override { return cache_->NewId(); }
+utilities/simulator_cache/sim_cache.cc:229:  size_t GetCapacity() const override { return cache_->GetCapacity(); }
+utilities/simulator_cache/sim_cache.cc:232:    return cache_->HasStrictCapacityLimit();
+utilities/simulator_cache/sim_cache.cc:235:  size_t GetUsage() const override { return cache_->GetUsage(); }
+utilities/simulator_cache/sim_cache.cc:238:    return cache_->GetUsage(handle);
+utilities/simulator_cache/sim_cache.cc:242:    return cache_->GetCharge(handle);
+utilities/simulator_cache/sim_cache.cc:245:  size_t GetPinnedUsage() const override { return cache_->GetPinnedUsage(); }
+utilities/simulator_cache/sim_cache.cc:248:    cache_->DisownData();
+utilities/simulator_cache/sim_cache.cc:249:    key_only_cache_->DisownData();
+utilities/simulator_cache/sim_cache.cc:255:    cache_->ApplyToAllCacheEntries(callback, thread_safe);
+utilities/simulator_cache/sim_cache.cc:259:    cache_->EraseUnRefEntries();
+utilities/simulator_cache/sim_cache.cc:260:    key_only_cache_->EraseUnRefEntries();
+utilities/simulator_cache/sim_cache.cc:264:    return key_only_cache_->GetCapacity();
+utilities/simulator_cache/sim_cache.cc:266:  size_t GetSimUsage() const override { return key_only_cache_->GetUsage(); }
+utilities/simulator_cache/sim_cache.cc:268:    key_only_cache_->SetCapacity(capacity);
+utilities/simulator_cache/sim_cache.cc:302:    ret.append(cache_->GetPrintableOptions());
+utilities/simulator_cache/sim_cache.cc:304:    ret.append(key_only_cache_->GetPrintableOptions());
+utilities/transactions/lock/range/range_tree/range_tree_lock_manager.cc:310:  ltree_lookup_cache_->Scrape(&local_caches, nullptr);
+utilities/transactions/lock/range/range_tree/range_tree_lock_manager.cc:391:  ltree_lookup_cache_->Scrape(&local_caches, nullptr);
+utilities/transactions/lock/range/range_tree/range_tree_lock_manager.cc:400:  if (ltree_lookup_cache_->Get() == nullptr) {
+utilities/transactions/lock/range/range_tree/range_tree_lock_manager.cc:401:    ltree_lookup_cache_->Reset(new LockTreeMap());
+utilities/transactions/lock/range/range_tree/range_tree_lock_manager.cc:404:  auto ltree_map_cache = static_cast<LockTreeMap*>(ltree_lookup_cache_->Get());
+utilities/transactions/lock/point/point_lock_manager.cc:153:  lock_maps_cache_->Scrape(&local_caches, nullptr);
+utilities/transactions/lock/point/point_lock_manager.cc:165:  if (lock_maps_cache_->Get() == nullptr) {
+utilities/transactions/lock/point/point_lock_manager.cc:166:    lock_maps_cache_->Reset(new LockMaps());
+utilities/transactions/lock/point/point_lock_manager.cc:169:  auto lock_maps_cache = static_cast<LockMaps*>(lock_maps_cache_->Get());
+util/compression.h:427:      uncomp_cached_data_ = ctx_cache_->GetCachedZSTDUncompressData();
+util/compression.h:433:      ctx_cache_->ReturnCachedZSTDUncompressData(

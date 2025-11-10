@@ -1,0 +1,11 @@
+block_based_table_factory.cc:615:    const char* block_cache_name = table_options_.block_cache->Name();
+block_based_table_factory.cc:622:    ret.append(table_options_.block_cache->GetPrintableOptions());
+block_based_table_reader_impl.h:102:      s = block_cache->Insert(unique_key, nullptr,
+block_based_table_reader_impl.h:174:      s = block_cache->Insert(unique_key, nullptr,
+block_based_table_reader.cc:433:  auto cache_handle = block_cache->Lookup(key, rep_->ioptions.statistics);
+block_based_table_reader.cc:437:                          block_cache->GetUsage(cache_handle));
+block_based_table_reader.cc:1209:          reinterpret_cast<TBlocklike*>(block_cache->Value(cache_handle)),
+block_based_table_reader.cc:1263:      s = block_cache->Insert(block_cache_key, block_holder.get(), charge,
+block_based_table_reader.cc:1369:    s = block_cache->Insert(block_cache_key, block_holder.get(), charge,
+block_based_table_reader.cc:2753:              block_cache->Ref(biter->cache_handle());
+reader_common.h:21:             ? table_options.block_cache->memory_allocator()
